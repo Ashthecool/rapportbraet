@@ -169,6 +169,11 @@ dialog.structured #sText { flex: none; min-height: 96px; overflow: hidden; paddi
 .saved { font-size: 13px; color: var(--muted); margin-left: auto; }
 .howto { border-radius: 12px; padding: 12px 14px; background: var(--soft); font-size: 14px; display: grid; gap: 4px; }
 .howto ol { margin: 0; padding-left: 20px; }
+.wordtag { justify-self: start; margin-top: 4px; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--bg); color: var(--muted); }
+.wordtag.inword { background: color-mix(in srgb, var(--done) 18%, var(--paper)); color: var(--done); }
+.wordtag.changed { background: color-mix(in srgb, var(--c2) 22%, var(--paper)); color: var(--ink); }
+.wordtag.missing { background: color-mix(in srgb, var(--danger) 18%, var(--paper)); color: var(--danger); }
+.word-now { font-size: 13px; color: var(--muted); }
 .hook { margin-top: 6px; }
 .hook summary { cursor: pointer; font-weight: 700; color: var(--hue); width: fit-content; }
 .hook p { margin: 6px 0; }
@@ -177,6 +182,7 @@ dialog.structured #sText { flex: none; min-height: 96px; overflow: hidden; paddi
 .hook-row .btn { padding: 6px 12px; }
 .hook-msg { color: var(--danger); font-weight: 700; }
 #sCopy:disabled { opacity: .7; cursor: wait; }
+#sPull.confirm { background: var(--danger); border-color: var(--danger); color: var(--paper); }
 .copybox { width: 100%; height: 90px; font-size: 13px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
 
 /* Lists and tables inside the sheet */
@@ -322,6 +328,8 @@ table.grid { border-collapse: collapse; width: 100%; }
         <div class="actions">
           <button class="btn primary" type="button" id="sCopy">Kopiér til Word</button>
           <button class="btn" type="button" id="sDone">Marker som færdig</button>
+          <span class="word-now" id="sWord"></span>
+          <button class="btn" type="button" id="sPull" hidden>Hent teksten fra Word</button>
           <span class="saved" id="sSaved"></span>
         </div>
         <div class="howto" id="sHow" hidden></div>
@@ -473,7 +481,7 @@ const DAYS = [
   ['2026-11-13', 'Playtest', ['test', 'kortlaegning']],
 ];
 
-const state = { docs: {}, filter: null, db: null, loaded: false, openId: null, items: [], dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
+const state = { docs: {}, word: {}, filter: null, db: null, loaded: false, openId: null, items: [], dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const pawn = (who) => `<svg class="pawn" style="--pc:var(--p-${who})" aria-hidden="true"><use href="#pawn"/></svg>`;
@@ -482,7 +490,9 @@ const chap = (s) => CHAPTERS.find((c) => c.n === s.ch);
 const numOf = (s) => `${s.ch}.${SECTIONS.filter((x) => x.ch === s.ch).indexOf(s) + 1}`;
 const docOf = (id) => state.docs[id] || {};
 const whoOf = (s) => docOf(s.id).who || s.who;
-const textOf = (id) => docOf(id).text || '';
+// What the bot last saw in Word (collection "report"). A section nobody has written on the board yet starts with that text.
+const wordOf = (id) => state.word[id] || {};
+const textOf = (id) => (id in state.docs ? state.docs[id].text || '' : wordOf(id).text || '');
 const itemsOf = (id) => (Array.isArray(docOf(id).items) ? docOf(id).items : []);
 const whoName = (id) => (id === ALL ? 'Alle' : PEOPLE.find((p) => p.id === id)?.name ?? 'Alle');
 const whoLabel = (id) => (!id ? '' : id === ALL ? 'Hele gruppen' : PEOPLE.find((p) => p.id === id)?.name ?? '');
@@ -493,6 +503,21 @@ const itemWords = (s, items) => (s.list ? words(cleanItems(s, items).map((it) =>
 const wordsOf = (s) => words(textOf(s.id)) + itemWords(s, itemsOf(s.id));
 const statusOf = (s) => (docOf(s.id).done ? 'done' : wordsOf(s) ? 'doing' : 'todo');
 const KIND = { table: 'Tabel', cards: 'Liste', bullets: 'Liste' };
+
+// Compares the board with Word. Word tables aren't part of the bot's text, so table rows are left out on both sides.
+const TABLE_LINE = /^\s*\|.*\|\s*$/;
+const norm = (t) => String(t || '').split('\n').map((l) => l.trim()).filter((l) => l && !TABLE_LINE.test(l)).join('\n');
+const sendText = (s, text, items) => [text.trim(), s.list ? listMarkdown(s, items) : ''].filter(Boolean).join('\n\n');
+function wordStatus(s, text = textOf(s.id), items = itemsOf(s.id)) {
+  const w = state.word[s.id];
+  if (!w) return '';
+  const mine = norm(sendText(s, text, items));
+  if (!w.inWord) return mine ? 'missing' : '';
+  if (!mine) return '';
+  return mine === norm(w.text) ? 'inword' : 'changed';
+}
+const WORD_LABEL = { inword: 'I Word ✓', changed: 'Forskellig fra Word', missing: 'Mangler i Word' };
+const wordTag = (st) => (st ? `<span class="wordtag ${st}">${WORD_LABEL[st]}</span>` : '');
 
 function renderPlayers() {
   $('#players').innerHTML = PEOPLE.map((p) => `<button type="button" class="player" data-p="${p.id}" style="--pc:var(--p-${p.id})" aria-pressed="${state.filter === p.id}">${pawn(p.id)}<span>${esc(p.name)}<small>${esc(p.role)}</small></span></button>`).join('');
@@ -514,7 +539,7 @@ function renderBoard() {
         const kind = s.list ? `<span class="kind">${KIND[s.list.kind]}${rows ? ` · ${rows} ${rows === 1 ? s.list.one.toLowerCase() : 'stk.'}` : ''}</span>` : '';
         return `<button type="button" class="sq ${st}${dim ? ' dim' : ''}" data-id="${s.id}" aria-label="${esc(s.title)}, ${st === 'done' ? 'færdig' : st === 'doing' ? 'i gang' : 'ikke startet'}, ${esc(whoName(w))}">
           <span class="top"><span class="num">${numOf(s)}</span><span class="mark ${st}"></span></span>
-          <span style="display:grid;gap:2px;align-content:start"><span class="name">${esc(s.title)}</span>${kind}</span>
+          <span style="display:grid;gap:2px;align-content:start"><span class="name">${esc(s.title)}</span>${kind}${wordTag(wordStatus(s))}</span>
           <span class="foot" style="--pc:var(--p-${w})">${pawn(w)}<span class="meter"><b style="--w:${Math.min(100, Math.round(n / s.goal * 100))}%"></b></span><span class="words">${n}/${s.goal}</span></span>
         </button>`;
       }).join('')}</div>
@@ -718,7 +743,26 @@ function updateSheetMeta() {
   const done = Boolean(docOf(s.id).done);
   $('#sDone').textContent = done ? 'Færdig ✓' : 'Marker som færdig';
   $('#sDone').classList.toggle('done-on', done);
+  const ws = wordStatus(s, ta.value, state.items);
+  $('#sWord').innerHTML = ws === 'missing' ? `${wordTag(ws)} Kør <b>/apply-template</b> i Discord først.` : wordTag(ws);
+  $('#sPull').hidden = ws !== 'changed';
 }
+
+// Someone may have edited Word directly. This takes Word's text instead of sending the board's over it.
+$('#sPull').addEventListener('click', () => {
+  const b = $('#sPull'); const s = sec(state.openId);
+  if (!b.classList.contains('confirm')) {
+    b.classList.add('confirm'); b.textContent = s.list ? 'Erstat tekst og rækker?' : 'Erstat teksten her?';
+    setTimeout(() => { b.classList.remove('confirm'); b.textContent = 'Hent teksten fra Word'; }, 4000);
+    return;
+  }
+  b.classList.remove('confirm'); b.textContent = 'Hent teksten fra Word';
+  clearTimeout(state.timer); state.dirty = false;
+  ta.value = wordOf(s.id).text || '';
+  if (s.list) { state.items = [blankItem(s)]; renderList(); }
+  grow(ta);
+  patch(s.id, s.list ? { text: ta.value, items: [] } : { text: ta.value });
+});
 
 function patch(id, fields) {
   const s = sec(id);
@@ -876,7 +920,7 @@ $('#sCopy').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Sender…';
   try {
     await sendToBot(s, payload);
-    how.innerHTML = `<b>Sendt til botten!</b> Den svarer ✏️ i rapport-kanalen, når teksten står i Word.${webhookForm(false)}`;
+    how.innerHTML = `<b>Sendt til botten!</b> Feltet skifter til <b>I Word ✓</b>, når teksten står i Word.${webhookForm(false)}`;
   } catch {
     copyForDiscord(payload, '<b>Kunne ikke sende direkte</b>, så teksten er kopieret i stedet. ');
   } finally {
@@ -916,10 +960,7 @@ async function firebaseStore() {
     return;
   }
   state.db = db;
-  db.collection('sections').onSnapshot((snap) => {
-    const docs = {};
-    snap.docs.forEach((d) => { docs[d.id] = d.data(); });
-    state.docs = docs;
+  const refresh = () => {
     renderBoard();
     const s = state.openId && sec(state.openId);
     // Show someone else's changes in the open sheet, unless you are typing in it right now.
@@ -928,7 +969,12 @@ async function firebaseStore() {
       if (s.list && JSON.stringify(cleanItems(s, state.items)) !== JSON.stringify(itemsOf(s.id))) { loadItems(s); renderList(); }
     }
     if (state.openId) updateSheetMeta();
-  }, () => { const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Den fælles tekst kunne ikke hentes'; });
+  };
+  const failed = () => { const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Den fælles tekst kunne ikke hentes'; };
+  const byId = (snap) => Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+  db.collection('sections').onSnapshot((snap) => { state.docs = byId(snap); refresh(); }, failed);
+  // Kept up to date by the Report Helper bot whenever the Word file changes.
+  db.collection('report').onSnapshot((snap) => { state.word = byId(snap); refresh(); }, () => {});
 })();
 </script>
 

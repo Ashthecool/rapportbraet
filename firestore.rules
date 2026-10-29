@@ -13,5 +13,15 @@ service cloud.firestore {
         && (!('items' in request.resource.data) || (request.resource.data.items is list && request.resource.data.items.size() < 200));
       allow delete: if false;
     }
+    // Written by the Report Helper bot: what each section says in Word right now.
+    match /report/{id} {
+      allow read: if true;
+      allow write: if id.matches('[a-z0-9-]{1,40}')
+        && request.resource.data.keys().hasOnly(['text', 'number', 'inWord', 'at'])
+        && request.resource.data.text is string && request.resource.data.text.size() < 200000
+        && request.resource.data.number is string && request.resource.data.inWord is bool
+        && request.resource.data.at is timestamp;
+      allow delete: if false;
+    }
   }
 }
