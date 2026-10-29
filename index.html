@@ -220,6 +220,7 @@ table.grid { border-collapse: collapse; width: 100%; }
 .f .cell, .bul .cell { border: 1.5px solid var(--line); border-radius: 10px; background: var(--bg); }
 .f .cell:focus, .bul .cell:focus { border-color: var(--hue); }
 .f textarea.cell { min-height: 64px; }
+.f textarea.cell[readonly] { min-height: 0; background: transparent; border-color: transparent; padding-left: 0; font-weight: 700; cursor: default; }
 .bul li { display: flex; align-items: center; gap: 6px; }
 .bul li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); flex: none; }
 
@@ -387,8 +388,9 @@ const CHAPTERS = [
 // kind: 'table' (one row per item, every box editable), 'cards' (bigger items with several fields), 'bullets' (one line per item).
 // Field types: line, long (several lines), lines (one bullet per line), who (person picker).
 const who = (label = 'Ansvarlig', extra = {}) => ({ k: 'who', label, type: 'who', w: 140, ...extra });
-const questions = (ph) => ({
-  kind: 'cards', title: 'Spørgsmål', one: 'Spørgsmål', add: 'Tilføj spørgsmål',
+// `preset` = questions the group already knows. They are on the sheet from the start, so you only write the answer.
+const questions = (ph, preset = []) => ({
+  kind: 'cards', title: 'Spørgsmål', one: 'Spørgsmål', add: 'Tilføj spørgsmål', preset,
   fields: [
     { k: 'q', label: 'Spørgsmål', type: 'line', ph },
     who(),
@@ -456,11 +458,19 @@ const SECTIONS = [
     points: ['Ét spørgsmål per kort, med én ansvarlig.', 'Svar med jeres egne forsøg.', 'Slut hvert svar med en minikonklusion.'],
     example: 'Vores produkt skal bruge MQTT, så spillernes M5\'ere kan sende træk til hinanden. Det skal kunne ses på brættet, ikke kun i koden.',
     link: [SITE + '/forlob/2/sensorer-og-moduler', 'Sensorer og moduler'],
-    list: questions('Hvad er MQTT-protokollen?') },
+    list: questions('Hvad er MQTT-protokollen?', [
+      'Hvad er en M5-controller?',
+      'Hvad er en digital knap?',
+      'Hvordan 3D-printer man?',
+      'Hvordan virker lasercut?',
+    ]) },
   { ch: 3, id: 'teoretiske-vinkler', title: 'Teoretiske vinkler', who: 'sebastian', goal: 800, short: 'Hvordan teorien styrer valg i spillet.',
     points: ['Norman: affordance, signifier, constraint, feedback.', 'De fire mikrointeraktioner fra A4-arkene.', 'Slut hvert svar med en minikonklusion.'],
     link: [SITE + '/ddu/kompendium/norman', 'Normans designprincipper'],
-    list: questions('Hvordan svarer spillet, når spilleren gør én handling?') },
+    list: questions('Hvordan svarer spillet, når spilleren gør én handling?', [
+      'Hvordan vil vi styrke vores affordance og feedback, så spilleren ved hvad man skal gøre?',
+      'Hvordan får vi spilleren til at interagere fysisk med vores spil på en sjov måde?',
+    ]) },
   { ch: 3, id: 'maalgruppe-indkredsning', title: 'Målgruppe indkredsning', who: 'hrafn', goal: 400, short: 'Undersøg målgruppen grundigt.',
     points: ['Hvad vil 16–20-årige have ud af en spilaften?', 'Hvilke hybridspil findes, og hvad lærer I af dem?', 'Slut med en konkret konsekvens for spillet.'],
     list: questions('Hvilke hybridspil findes, og hvad kan vi lære af dem?') },
@@ -526,7 +536,8 @@ const itemsOf = (id) => (Array.isArray(docOf(id).items) ? docOf(id).items : []);
 const whoName = (id) => (id === ALL ? 'Alle' : PEOPLE.find((p) => p.id === id)?.name ?? 'Alle');
 const whoLabel = (id) => (!id ? '' : id === ALL ? 'Hele gruppen' : PEOPLE.find((p) => p.id === id)?.name ?? '');
 const words = (t) => (t.replace(/[*_#-]/g, ' ').match(/[\p{L}\p{N}]+/gu) || []).length;
-const filled = (s, it) => s.list.fields.some((f) => f.type !== 'who' && String(it?.[f.k] ?? '').trim());
+const isPreset = (s, it) => Boolean(s.list?.preset?.includes(String(it?.q ?? '').trim()));
+const filled = (s, it) => s.list.fields.some((f) => f.type !== 'who' && !(f.k === 'q' && isPreset(s, it)) && String(it?.[f.k] ?? '').trim());
 const cleanItems = (s, items) => (s.list ? items.filter((it) => filled(s, it)) : []);
 const itemWords = (s, items) => (s.list ? words(cleanItems(s, items).map((it) => s.list.fields.filter((f) => f.type !== 'who').map((f) => it[f.k] || '').join(' ')).join(' ')) : 0);
 const wordsOf = (s) => words(textOf(s.id)) + itemWords(s, itemsOf(s.id));
@@ -679,13 +690,23 @@ function openSheet(id) {
   ta.focus({ preventScroll: true });
 }
 
+// Known questions that aren't answered yet go back in at their own place in the list.
+function startItems(s, saved = []) {
+  const items = saved.map((it) => ({ ...blankItem(s), ...it }));
+  (s.list.preset || []).forEach((q, p) => {
+    if (!items.some((it) => String(it.q ?? '').trim() === q)) items.splice(Math.min(p, items.length), 0, { ...blankItem(s), q });
+  });
+  if (!items.length) items.push(blankItem(s));
+  return items;
+}
+
 function loadItems(s) {
-  state.items = s.list ? itemsOf(s.id).map((it) => ({ ...blankItem(s), ...it })) : [];
-  if (s.list && !state.items.length) state.items.push(blankItem(s));
+  state.items = s.list ? startItems(s, itemsOf(s.id)) : [];
 }
 
 // ---------- lists and tables ----------
 function fieldInput(s, f, it, i, attrs = '') {
+  if (f.k === 'q' && isPreset(s, it)) attrs += ' readonly';
   const data = `data-i="${i}" data-k="${f.k}" id="f-${s.id}-${i}-${f.k}" ${attrs}`;
   const v = it[f.k] ?? '';
   if (f.type === 'who') {
@@ -701,7 +722,7 @@ function rowButtons(s, i) {
   const n = state.items.length;
   return `<button type="button" class="ib" data-act="up" data-i="${i}" aria-label="Flyt op"${i === 0 ? ' disabled' : ''}>↑</button>` +
     `<button type="button" class="ib" data-act="down" data-i="${i}" aria-label="Flyt ned"${i === n - 1 ? ' disabled' : ''}>↓</button>` +
-    `<button type="button" class="ib" data-act="del" data-i="${i}" aria-label="Slet ${esc(s.list.one.toLowerCase())} ${i + 1}">×</button>`;
+    (isPreset(s, state.items[i]) ? '' : `<button type="button" class="ib" data-act="del" data-i="${i}" aria-label="Slet ${esc(s.list.one.toLowerCase())} ${i + 1}">×</button>`);
 }
 
 function renderList() {
@@ -786,7 +807,7 @@ listEl.addEventListener('click', (e) => {
       return;
     }
     state.items.splice(i, 1);
-    if (!state.items.length) state.items.push(blankItem(s));
+    state.items = startItems(s, state.items);
     renderList(); edited();
     focusField(Math.min(i, state.items.length - 1));
   }
@@ -826,7 +847,7 @@ $('#sPull').addEventListener('click', () => {
   b.classList.remove('confirm'); b.textContent = 'Hent teksten fra Word';
   clearTimeout(state.timer); state.dirty = false;
   ta.value = wordOf(s.id).text || '';
-  if (s.list) { state.items = [blankItem(s)]; renderList(); }
+  if (s.list) { state.items = startItems(s); renderList(); }
   grow(ta);
   patch(s.id, s.list ? { text: ta.value, items: [] } : { text: ta.value });
 });
