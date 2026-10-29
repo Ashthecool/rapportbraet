@@ -1,0 +1,17 @@
+rules_version = '2';
+// Paste into Firebase console → Firestore Database → Rules, then Publish.
+// Anyone with the board's link can read and write sections, so the rules only check the shape of the data.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sections/{id} {
+      allow read: if true;
+      allow write: if id.matches('[a-z0-9-]{1,40}')
+        && request.resource.data.keys().hasOnly(['text', 'done', 'who', 'items'])
+        && request.resource.data.text is string && request.resource.data.text.size() < 100000
+        && request.resource.data.done is bool
+        && request.resource.data.who is string && request.resource.data.who.size() < 20
+        && (!('items' in request.resource.data) || (request.resource.data.items is list && request.resource.data.items.size() < 200));
+      allow delete: if false;
+    }
+  }
+}

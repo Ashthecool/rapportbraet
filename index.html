@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ashes &amp; Iron Rapportbræt</title>
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Layout: a game board. Chapters are coloured rows of squares, each player is a pawn, and a square opens into a writing sheet. */
+:root {
+  --bg: #e9f0ed;
+  --paper: #ffffff;
+  --ink: #1b1f24;
+  --muted: #56606a;
+  --line: #d3dbd7;
+  --c1: #0f7a64; --c2: #946800; --c3: #c4401f; --c4: #5a48d6;
+  --c1-soft: #d3ece5; --c2-soft: #f8ebc4; --c3-soft: #f8dbd3; --c4-soft: #e2defa;
+  --p-asbjorn: #d94c30; --p-tobias: #2f74d6; --p-sebastian: #18995a; --p-hrafn: #d9a300; --p-alle: #7a848e;
+  --done: #15824d;
+  --danger: #c4401f;
+  --shadow: 0 2px 0 rgba(27,31,36,.12);
+  --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161a; --paper: #1b2228; --ink: #eef2f4; --muted: #9aa5ae; --line: #2f3a42;
+    --c1: #4cc7a8; --c2: #f0c040; --c3: #ff8a6e; --c4: #a497ff;
+    --c1-soft: #173a33; --c2-soft: #3b3115; --c3-soft: #3f231c; --c4-soft: #2a2550;
+    --p-asbjorn: #ff7d61; --p-tobias: #6aa5ff; --p-sebastian: #47cf88; --p-hrafn: #f0c040; --p-alle: #8e99a3;
+    --done: #47cf88; --danger: #ff8a6e; --shadow: 0 2px 0 rgba(0,0,0,.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161a; --paper: #1b2228; --ink: #eef2f4; --muted: #9aa5ae; --line: #2f3a42;
+  --c1: #4cc7a8; --c2: #f0c040; --c3: #ff8a6e; --c4: #a497ff;
+  --c1-soft: #173a33; --c2-soft: #3b3115; --c3-soft: #3f231c; --c4-soft: #2a2550;
+  --p-asbjorn: #ff7d61; --p-tobias: #6aa5ff; --p-sebastian: #47cf88; --p-hrafn: #f0c040; --p-alle: #8e99a3;
+  --done: #47cf88; --danger: #ff8a6e; --shadow: 0 2px 0 rgba(0,0,0,.45);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 36px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.05; }
+p { margin: 0; }
+a { color: inherit; text-underline-offset: 3px; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--c4); outline-offset: 2px; }
+.pawn { width: 1em; height: 1.15em; display: inline-block; vertical-align: -0.15em; fill: currentColor; flex: none; }
+
+/* Header */
+header { display: grid; gap: 22px; }
+.kicker { font-weight: 700; font-size: 15px; color: var(--muted); }
+h1 { font-size: clamp(44px, 9vw, 84px); font-weight: 800; letter-spacing: -.03em; }
+.players { display: flex; flex-wrap: wrap; gap: 10px; }
+.player { display: inline-flex; align-items: center; gap: 10px; padding: 8px 16px 8px 10px; border-radius: 999px; border: 2px solid var(--line); background: var(--paper); cursor: pointer; font-weight: 700; box-shadow: var(--shadow); text-align: left; transition: transform .12s ease; }
+.player .pawn { font-size: 26px; color: var(--pc); }
+.player small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); line-height: 1.1; }
+.player[aria-pressed="true"] { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 14%, var(--paper)); }
+
+.race { display: grid; gap: 10px; background: var(--paper); border: 2px solid var(--line); border-radius: 18px; padding: 16px 18px 18px; box-shadow: var(--shadow); }
+.race-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; }
+.race-top strong { font-family: var(--display); font-size: 22px; font-weight: 800; }
+.race-top span { font-size: 14px; color: var(--muted); }
+.track { position: relative; display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 4px; padding-top: 30px; }
+.track i { height: 16px; border-radius: 5px; background: var(--bg); border: 2px solid var(--line); }
+.track i.doing { border-color: var(--c2); background: color-mix(in srgb, var(--c2) 35%, var(--bg)); }
+.track i.done { border-color: var(--done); background: var(--done); }
+.track i:last-of-type { background: var(--ink); border-color: var(--ink); }
+.track .runner { position: absolute; top: 0; font-size: 26px; color: var(--c3); transform: translateX(-50%); transition: left .6s cubic-bezier(.3,1.4,.5,1); }
+
+/* Today */
+.now-block { display: grid; gap: 8px; }
+.today { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 18px; border-radius: 16px; background: var(--ink); color: var(--bg); }
+.today b { font-family: var(--display); font-size: 18px; }
+.today .when { font-size: 14px; opacity: .8; }
+.today .go { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.today button { border: 0; border-radius: 999px; padding: 6px 14px; background: var(--bg); color: var(--ink); font-weight: 700; font-size: 14px; cursor: pointer; }
+details.plan summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 2px; width: fit-content; }
+.plan ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
+.plan li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.plan li.past { color: var(--muted); }
+.plan li.now { font-weight: 700; }
+.plan .d { font-variant-numeric: tabular-nums; }
+
+/* Board */
+.chapter { display: grid; gap: 14px; }
+.chapter-head { display: flex; align-items: center; gap: 12px; }
+.chapter-head .badge { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--hue); color: var(--paper); font-family: var(--display); font-weight: 800; font-size: 22px; flex: none; }
+.chapter-head h2 { font-size: 26px; font-weight: 800; }
+.chapter-head p { font-size: 14px; color: var(--muted); }
+.squares { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; }
+.sq { position: relative; display: grid; grid-template-rows: auto 1fr auto; gap: 10px; min-height: 136px; min-width: 0; padding: 14px; text-align: left; border-radius: 16px; background: var(--paper); border: 2px solid var(--line); border-bottom-width: 5px; cursor: pointer; transition: transform .12s ease, border-color .12s ease, opacity .2s ease; }
+.sq .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sq .num { font-weight: 700; font-size: 13px; color: var(--hue); font-variant-numeric: tabular-nums; }
+.sq .name { font-family: var(--display); font-size: 19px; font-weight: 700; line-height: 1.12; overflow-wrap: break-word; hyphens: auto; }
+.sq .kind { font-size: 12px; font-weight: 700; color: var(--hue); }
+.sq .foot { display: flex; align-items: center; gap: 8px; }
+.sq .foot .pawn { font-size: 20px; color: var(--pc); }
+.meter { flex: 1; height: 8px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+.meter b { display: block; height: 100%; width: var(--w, 0%); background: var(--hue); border-radius: 99px; }
+.sq .words { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sq.dim { opacity: .35; }
+.sq.done { background: color-mix(in srgb, var(--done) 12%, var(--paper)); border-color: color-mix(in srgb, var(--done) 55%, var(--line)); }
+.mark { width: 22px; height: 22px; border-radius: 50%; border: 2.5px dashed var(--line); display: grid; place-items: center; flex: none; }
+.mark.doing { border: 2.5px solid var(--hue); background: conic-gradient(var(--hue) 0 50%, transparent 0); }
+.mark.done { border: 0; background: var(--done); }
+.mark.done::after { content: ""; width: 9px; height: 5px; border-left: 2.5px solid var(--paper); border-bottom: 2.5px solid var(--paper); transform: translateY(-1px) rotate(-45deg); }
+@media (hover: hover) {
+  .player:hover { transform: translateY(-1px); }
+  .sq:hover { transform: translateY(-3px); border-color: var(--hue); }
+}
+
+/* How to + rules */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.step { background: var(--paper); border: 2px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.step .n { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--bg); font-family: var(--display); font-weight: 800; }
+.step h3 { font-size: 19px; font-weight: 700; }
+.step p { font-size: 14px; color: var(--muted); }
+.section-title { font-size: 28px; font-weight: 800; }
+.rules { display: flex; flex-wrap: wrap; gap: 10px; }
+.rule { padding: 10px 14px; border-radius: 12px; background: var(--paper); border: 2px dashed var(--line); font-size: 15px; }
+.rule b { font-family: var(--display); }
+
+/* Writing sheet */
+dialog { width: min(980px, calc(100vw - 24px)); max-width: none; height: min(800px, calc(100dvh - 32px)); max-height: none; padding: 0; border: 0; border-radius: 22px; background: var(--paper); color: var(--ink); box-shadow: 0 30px 90px -20px rgba(0,0,0,.55); overflow: hidden; }
+dialog.wide { width: min(1300px, calc(100vw - 24px)); }
+dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+[hidden] { display: none !important; }
+dialog::backdrop { background: rgba(10, 14, 18, .55); }
+.sheet-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: var(--hue); color: var(--paper); }
+.sheet-head .num { font-weight: 700; opacity: .85; font-variant-numeric: tabular-nums; }
+.sheet-head h2 { font-size: clamp(24px, 4vw, 34px); font-weight: 800; flex: 1; min-width: 0; overflow-wrap: break-word; }
+.close { width: 40px; height: 40px; border-radius: 50%; border: 0; background: color-mix(in srgb, var(--paper) 22%, transparent); color: inherit; font-size: 22px; cursor: pointer; flex: none; }
+.sheet-body { display: grid; grid-template-columns: minmax(0, 290px) minmax(0, 1fr); min-height: 0; }
+dialog.wide .sheet-body { grid-template-columns: minmax(0, 230px) minmax(0, 1fr); }
+.guide { padding: 20px; background: var(--soft); overflow-y: auto; display: grid; gap: 16px; align-content: start; }
+.guide .short { font-family: var(--display); font-size: 20px; font-weight: 700; line-height: 1.2; }
+.guide h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.guide ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 15px; }
+.guide blockquote { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--paper); font-style: italic; font-size: 15px; }
+.guide .links { font-size: 14px; display: grid; gap: 4px; }
+.write { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.tools button.fmt { min-width: 36px; height: 34px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--bg); cursor: pointer; font-size: 15px; }
+.tools .spacer { flex: 1; }
+.tools label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+select { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+.canvas { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+#sText { flex: 1; width: 100%; resize: none; border: 0; padding: 18px 20px; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.65; outline: none; }
+#sText::placeholder, .cell::placeholder { color: var(--muted); opacity: .8; }
+dialog.structured #sText { flex: none; min-height: 96px; overflow: hidden; padding-bottom: 10px; }
+.bottom { display: grid; gap: 10px; padding: 12px 16px 16px; border-top: 1px solid var(--line); background: var(--paper); }
+.goal { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.goal .meter { height: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border-radius: 12px; padding: 10px 16px; font-weight: 700; cursor: pointer; border: 2px solid var(--line); background: var(--bg); border-bottom-width: 4px; }
+.btn:active { transform: translateY(2px); border-bottom-width: 2px; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.done-on { background: var(--done); border-color: var(--done); color: var(--paper); }
+.saved { font-size: 13px; color: var(--muted); margin-left: auto; }
+.howto { border-radius: 12px; padding: 12px 14px; background: var(--soft); font-size: 14px; display: grid; gap: 4px; }
+.howto ol { margin: 0; padding-left: 20px; }
+.hook { margin-top: 6px; }
+.hook summary { cursor: pointer; font-weight: 700; color: var(--hue); width: fit-content; }
+.hook p { margin: 6px 0; }
+.hook-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.hook-row input { flex: 1 1 220px; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); }
+.hook-row .btn { padding: 6px 12px; }
+.hook-msg { color: var(--danger); font-weight: 700; }
+#sCopy:disabled { opacity: .7; cursor: wait; }
+.copybox { width: 100%; height: 90px; font-size: 13px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+
+/* Lists and tables inside the sheet */
+.items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 4px 20px 24px; min-width: 0; }
+.items-head { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--line); padding-top: 16px; }
+.items-head h3 { font-size: 19px; font-weight: 700; }
+.items-head span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.items-hint { font-size: 13px; color: var(--muted); margin-left: auto; }
+.cell { display: block; width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 15px; line-height: 1.4; padding: 9px 10px; resize: none; overflow: hidden; outline: none; }
+select.cell { appearance: auto; cursor: pointer; }
+.tbl-wrap { overflow-x: auto; border: 1.5px solid var(--line); border-radius: 12px; }
+table.grid { border-collapse: collapse; width: 100%; }
+.grid th { text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 9px 10px; background: var(--bg); border-bottom: 1.5px solid var(--line); white-space: nowrap; }
+.grid td { border-top: 1px solid var(--line); vertical-align: top; padding: 0; }
+.grid tr:first-child td { border-top: 0; }
+.grid td + td { border-left: 1px solid var(--line); }
+.grid td:focus-within:not(.n):not(.row-act) { box-shadow: inset 0 0 0 2px var(--hue); background: color-mix(in srgb, var(--soft) 55%, var(--paper)); }
+.grid .n { width: 34px; text-align: center; color: var(--muted); padding-top: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.grid .n i { display: none; font-style: normal; }
+.row-act { white-space: nowrap; padding: 5px 6px !important; width: 1%; }
+.ib { width: 26px; height: 28px; border-radius: 8px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; }
+.ib:hover { background: var(--bg); color: var(--ink); }
+.ib:disabled { opacity: .3; cursor: default; background: transparent; }
+.ib.confirm { width: auto; padding: 0 9px; background: var(--danger); color: var(--paper); font-size: 13px; font-weight: 700; }
+.add { justify-self: start; border: 2px dashed var(--line); border-radius: 12px; background: transparent; padding: 9px 14px; font-weight: 700; color: var(--hue); cursor: pointer; }
+.add:hover { border-color: var(--hue); }
+.cards, .bul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.bul { gap: 6px; }
+.card { border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 12px 14px; display: grid; gap: 10px; }
+.card-top { display: flex; align-items: center; gap: 4px; }
+.card-top b { font-family: var(--display); font-size: 15px; color: var(--hue); flex: 1; }
+.f-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 190px); gap: 10px; }
+.f { display: grid; gap: 4px; min-width: 0; }
+.f > span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.f .cell, .bul .cell { border: 1.5px solid var(--line); border-radius: 10px; background: var(--bg); }
+.f .cell:focus, .bul .cell:focus { border-color: var(--hue); }
+.f textarea.cell { min-height: 64px; }
+.bul li { display: flex; align-items: center; gap: 6px; }
+.bul li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); flex: none; }
+
+@media (max-width: 760px) {
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .squares { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .sq { min-height: 120px; padding: 12px; }
+  .sq .name { font-size: 17px; }
+  .track { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .track .runner { display: none; }
+  .today .go { margin-left: 0; }
+  dialog, dialog.wide { width: 100vw; height: 100dvh; border-radius: 0; }
+  .sheet-head { padding-top: calc(14px + env(safe-area-inset-top, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  /* On a phone the guide and the writing area scroll as one page, with the buttons kept at the bottom. */
+  .sheet-body, dialog.wide .sheet-body { display: flex; flex-direction: column; overflow-y: auto; }
+  .guide { overflow: visible; }
+  .write { display: flex; flex-direction: column; flex: 1 0 auto; }
+  .canvas { overflow: visible; flex: 1 0 auto; }
+  #sText { min-height: 45dvh; }
+  dialog.structured #sText { min-height: 96px; }
+  .bottom { position: sticky; bottom: 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .items { padding-inline: 16px; }
+  .f-row { grid-template-columns: minmax(0, 1fr); }
+  .cell, #sText, select { font-size: 16px; }
+  /* Table rows turn into small cards with a label over each box. */
+  .grid thead { display: none; }
+  .grid, .grid tbody, .grid td { display: block; width: auto; }
+  .grid tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: 8px 12px 12px; border-top: 1.5px solid var(--line); }
+  .grid tr:first-child { border-top: 0; }
+  .grid td, .grid td + td { border: 0; grid-column: 1 / -1; }
+  .grid td.n { width: auto; grid-column: 1; grid-row: 1; text-align: left; padding-top: 6px; font-weight: 700; color: var(--hue); }
+  .grid .n i { display: inline; }
+  .grid td.row-act { grid-column: 2; grid-row: 1; }
+  .grid td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 8px 0 3px; }
+  .grid .cell { border: 1.5px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .grid td:focus-within:not(.n):not(.row-act) { box-shadow: none; background: transparent; }
+  .grid .cell:focus { border-color: var(--hue); }
+}
+@media (prefers-reduced-motion: reduce) { .sq, .player, .track .runner { transition: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="pawn" viewBox="0 0 20 23"><circle cx="10" cy="5.5" r="4.5"/><path d="M6.2 9.6h7.6l2.4 8.4H3.8z"/><rect x="1.5" y="17.5" width="17" height="5" rx="2.2"/></symbol>
+</svg>
+
+<div class="wrap" lang="da">
+  <header>
+    <div>
+      <p class="kicker">Ashes &amp; Iron · DDU-rapport · Gruppe Sebastian Steensborg Drejer</p>
+      <h1>Rapportbrættet</h1>
+    </div>
+    <div class="players" id="players" role="group" aria-label="Vis kun én persons felter"></div>
+    <div class="race">
+      <div class="race-top"><strong id="score">0 af 23 felter færdige</strong><span id="sync">Henter jeres tekst…</span></div>
+      <div class="track" id="track" aria-hidden="true"></div>
+    </div>
+  </header>
+
+  <div class="now-block">
+    <div class="today" id="today"></div>
+    <details class="plan"><summary>Se hele forløbsplanen</summary><ol id="plan"></ol></details>
+  </div>
+
+  <main id="board" style="display:grid;gap:36px"></main>
+
+  <section style="display:grid;gap:14px" aria-labelledby="howTitle">
+    <h2 class="section-title" id="howTitle">Sådan kommer teksten i Word</h2>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><h3>Skriv her</h3><p>Klik et felt og skriv. Lister og tabeller fylder du ud række for række. Alt gemmes af sig selv, og hele gruppen kan se det.</p></div>
+      <div class="step"><span class="n">2</span><h3>Send til Word</h3><p>Tryk på knappen i feltet. Har du gemt rapport-kanalens Discord-webhook, går teksten direkte til botten. Ellers bliver den kopieret, og du indsætter den i en DM til botten.</p></div>
+      <div class="step"><span class="n">3</span><h3>Botten svarer ✏️</h3><p>Report Helper lægger teksten ind i Word under den rigtige overskrift og svarer ✏️. Tabeller bliver til rigtige Word-tabeller.</p></div>
+    </div>
+    <p style="font-size:14px;color:var(--muted)">Billeder og links i Word bliver stående når teksten skiftes ud. Sender I en tabel igen, erstatter den den gamle. Litteraturliste og Bilag klarer botten også: send den bare et billede eller et link.</p>
+  </section>
+
+  <section style="display:grid;gap:14px" aria-labelledby="rulesTitle">
+    <h2 class="section-title" id="rulesTitle">Husk</h2>
+    <div class="rules">
+      <span class="rule"><b>Én ansvarlig</b> per hv-spørgsmål</span>
+      <span class="rule"><b>½ side</b> per svar i anden iteration</span>
+      <span class="rule"><b>Minikonklusion</b> til sidst: hvad betyder det for spillet?</span>
+      <span class="rule"><b>Præcis én M5</b> per gruppemedlem</span>
+      <span class="rule"><b>Én brik</b> på brættet skal kunne flytte sig fysisk</span>
+    </div>
+  </section>
+</div>
+
+<dialog id="sheet" aria-labelledby="sTitle" lang="da">
+  <div class="sheet-head"><span class="num" id="sNum"></span><h2 id="sTitle"></h2><button class="close" id="sClose" type="button" aria-label="Luk">×</button></div>
+  <div class="sheet-body">
+    <aside class="guide" id="sGuide"></aside>
+    <div class="write">
+      <div class="tools">
+        <button class="fmt" type="button" data-fmt="b" title="Fed"><b>B</b></button>
+        <button class="fmt" type="button" data-fmt="i" title="Kursiv"><i>I</i></button>
+        <button class="fmt" type="button" data-fmt="li" title="Punktliste">• Punkt</button>
+        <span class="spacer"></span>
+        <label for="sWho">Ansvarlig <select id="sWho"></select></label>
+      </div>
+      <div class="canvas" id="sCanvas">
+        <textarea id="sText" spellcheck="true" lang="da" aria-label="Tekst" placeholder="Skriv løs. Én linje er ét afsnit i Word."></textarea>
+        <section class="items" id="sList" hidden></section>
+      </div>
+      <div class="bottom">
+        <div class="goal"><span id="sWords">0 ord</span><span class="meter"><b id="sMeter"></b></span><span id="sGoal"></span></div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="sCopy">Kopiér til Word</button>
+          <button class="btn" type="button" id="sDone">Marker som færdig</button>
+          <span class="saved" id="sSaved"></span>
+        </div>
+        <div class="howto" id="sHow" hidden></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const PEOPLE = [
+  { id: 'asbjorn', name: 'Asbjørn', role: 'Projektleder' },
+  { id: 'tobias', name: 'Tobias', role: 'UI-designer' },
+  { id: 'sebastian', name: 'Sebastian', role: 'UX-designer' },
+  { id: 'hrafn', name: 'Hrafn', role: 'Programmør / QA' },
+];
+const ALL = 'alle';
+const SITE = 'https://teknikfag-ddu.web.app';
+const CHAPTERS = [
+  { n: 1, title: 'Projektbeskrivelse', sub: 'Hvad, hvem, hvorfor og hvordan', hue: 'c1' },
+  { n: 2, title: 'Konceptudvikling', sub: 'Fra idé til spilbar papirprototype', hue: 'c2' },
+  { n: 3, title: 'Anden iteration', sub: 'Undersøg, planlæg, byg og test', hue: 'c3' },
+  { n: 4, title: 'Tredje iteration', sub: 'Ret, præsentér og saml op', hue: 'c4' },
+];
+
+// Sections with a `list` get rows you can add under the free text.
+// kind: 'table' (one row per item, every box editable), 'cards' (bigger items with several fields), 'bullets' (one line per item).
+// Field types: line, long (several lines), lines (one bullet per line), who (person picker).
+const who = (label = 'Ansvarlig', extra = {}) => ({ k: 'who', label, type: 'who', w: 140, ...extra });
+const questions = (ph) => ({
+  kind: 'cards', title: 'Spørgsmål', one: 'Spørgsmål', add: 'Tilføj spørgsmål',
+  fields: [
+    { k: 'q', label: 'Spørgsmål', type: 'line', ph },
+    who(),
+    { k: 'a', label: 'Svar', type: 'long', plain: true, ph: 'Jeres egne forsøg og fund. Mindst ½ side.' },
+    { k: 'mini', label: 'Minikonklusion', type: 'long', ph: 'Hvad betyder det konkret for spillet?' },
+  ],
+});
+
+// goal = words to aim for (½ side ≈ 200 ord).
+const SECTIONS = [
+  { ch: 1, id: 'indledning', title: 'Indledning', who: 'asbjorn', goal: 300, short: 'Gør læseren nysgerrig, og fortæl rammerne.',
+    points: ['Opgaven: et fysisk brætspil med digitale dele.', 'Hvor lang tid I har, og hvad I skal aflevere.', 'Hvorfor det er relevant, gerne med en kilde.'] },
+  { ch: 1, id: 'brainstorm', title: 'Brainstorm', who: ALL, goal: 60, short: 'Jeres allerførste idéer, da I fik opgaven.',
+    points: ['Mindmappet fra Whimsical (billedet ligger allerede i Word).', 'Et par linjer om hvilke idéer der kom frem.'] },
+  { ch: 1, id: 'tvaerfagligt', title: 'Tværfagligt fag', who: 'hrafn', goal: 200, short: 'Hvilke metoder fra andre fag bruger I?',
+    points: ['Programmering: fx flowcharts, MQTT og test af kode.', 'Et fag mere hvis I bruger det, fx Komm/IT (farveteori, personas).', 'Hvor i rapporten metoden kan ses.'] },
+  { ch: 1, id: 'maalgruppe', title: 'Målgruppe', who: 'hrafn', goal: 120, short: 'Kort om hvem spillet er til.',
+    points: ['16–20 år, 3–4 spillere.', 'Vant til skærme, men vil gerne være sammen.', 'Gerne en pop-up test.'], link: [SITE + '/ddu/testmetoder/pop-up', 'Pop-up test'] },
+  { ch: 1, id: 'problemformulering', title: 'Problemformulering', who: ALL, goal: 25, short: 'Ét overordnet spørgsmål om opgaven.',
+    points: ['Handler om opgaven, ikke om Ashes & Iron endnu.'] },
+  { ch: 1, id: 'afgraensning', title: 'Afgrænsning', who: 'asbjorn', goal: 150, short: 'Jeres ambitionsniveau, og hvad I ikke når.',
+    points: ['Hvad ville det færdige spil kunne?', 'Hvad skærer I fra pga. tiden, og hvorfor?'] },
+  { ch: 1, id: 'roller', title: 'Roller og leverancer', who: 'asbjorn', goal: 400, short: 'Hvem gør hvad, og hvad skal hver rolle levere?',
+    points: ['Én rolle per kort: PL, UI, UX, programmør, QA.', 'Skriv leverancerne én per linje. De bliver til en punktliste.', 'Skiftet af projektleder, og hvorfor (i teksten øverst).'],
+    list: { kind: 'cards', title: 'Roller', one: 'Rolle', add: 'Tilføj rolle', fields: [
+      { k: 'rolle', label: 'Rolle', type: 'line', ph: 'Projektleder (PL)' },
+      who('Hvem', { bare: true }),
+      { k: 'besk', label: 'Beskrivelse', type: 'long', plain: true, ph: 'Hvad rollen gør i projektet.' },
+      { k: 'lev', label: 'Leverancer', type: 'lines', ph: 'Én leverance per linje, fx Tidsplan' },
+    ] } },
+  { ch: 1, id: 'projektstyring', title: 'Projektstyring', who: 'asbjorn', goal: 200, short: 'Hvordan I styrer arbejdet.',
+    points: ['Gruppekontrakt.', 'Værktøjer: Discord-botten, Trello, post-its.', 'Hvordan I holder møder og fordeler opgaver.'],
+    list: { kind: 'bullets', title: 'Værktøjer og aftaler', one: 'Punkt', add: 'Tilføj punkt', fields: [
+      { k: 't', label: 'Punkt', type: 'line', ph: 'Fx Trello: hver opgave har én ejer og en dato' },
+    ] } },
+  { ch: 1, id: 'tidsplan', title: 'Tidsplan', who: 'asbjorn', goal: 80, short: 'Planen for hele forløbet, på én A4.',
+    points: ['Brug datoerne fra forløbsplanen.', 'Én række per aktivitet, med en ansvarlig.'],
+    list: { kind: 'table', title: 'Plan', one: 'Aktivitet', add: 'Tilføj aktivitet', fields: [
+      { k: 'dato', label: 'Dato', type: 'line', w: 110, ph: '5. nov' },
+      { k: 'akt', label: 'Aktivitet', type: 'line', w: 240, ph: 'Fysisk produktion' },
+      { k: 'lev', label: 'Leverance', type: 'line', w: 200, ph: 'Lasercut bræt' },
+      who(),
+    ] } },
+
+  { ch: 2, id: 'idegenerering', title: 'Idégenerering', who: ALL, goal: 80, short: 'Anden brainstorm. Nu er I klogere.',
+    points: ['Mindst tre varianter af idéen.', 'Mindmap, kort eller skitser.'],
+    list: { kind: 'table', title: 'Varianter', one: 'Variant', add: 'Tilføj variant', fields: [
+      { k: 'navn', label: 'Variant', type: 'line', w: 160, ph: 'Kortspil med M5-terninger' },
+      { k: 'besk', label: 'Kort beskrivelse', type: 'line', w: 300 },
+      { k: 'valg', label: 'Videre? Hvorfor', type: 'line', w: 220, ph: 'Nej, for svært at teste' },
+    ] } },
+  { ch: 2, id: 'idebeskrivelse', title: 'Idébeskrivelse', who: 'sebastian', goal: 100, short: 'Hvad er Ashes & Iron? Kort og klart.',
+    points: ['Idéen på 5–6 linjer, plus håndskitser.', 'Gameloop, kernemekanik og regler.'] },
+  { ch: 2, id: 'papirprototype', title: 'Papirprototype', who: 'tobias', goal: 200, short: 'Den spilbare papirudgave.',
+    points: ['Bræt, brikker og regler.', 'Hvad I forbedrede i den nye prototype.', 'Hvor sensorer og M5\'ere sidder.'] },
+  { ch: 2, id: 'rapid-test', title: 'Rapid test', who: 'hrafn', goal: 400, short: 'Testen på HCØ, og hvad I ændrede.',
+    points: ['Testoplæg i teksten: formål, deltagere, opgaver.', 'Mindst tre fund i tabellen.', 'Link til konceptvideo og testvideo.'],
+    list: { kind: 'table', title: 'Fund', one: 'Fund', add: 'Tilføj fund', fields: [
+      { k: 'fund', label: 'Fund', type: 'line', w: 220, ph: 'Spillerne glemte at trykke på M5' },
+      { k: 'bet', label: 'Betydning', type: 'line', w: 220 },
+      { k: 'aend', label: 'Ændring', type: 'line', w: 220, ph: 'LED blinker når det er din tur' },
+    ] } },
+
+  { ch: 3, id: 'tekniske-spoergsmaal', title: 'Tekniske spørgsmål', who: 'hrafn', goal: 800, short: 'Hv-spørgsmål om hver teknologi I bruger.',
+    points: ['Ét spørgsmål per kort, med én ansvarlig.', 'Svar med jeres egne forsøg.', 'Slut hvert svar med en minikonklusion.'],
+    example: 'Vores produkt skal bruge MQTT, så spillernes M5\'ere kan sende træk til hinanden. Det skal kunne ses på brættet, ikke kun i koden.',
+    link: [SITE + '/forlob/2/sensorer-og-moduler', 'Sensorer og moduler'],
+    list: questions('Hvad er MQTT-protokollen?') },
+  { ch: 3, id: 'teoretiske-vinkler', title: 'Teoretiske vinkler', who: 'sebastian', goal: 800, short: 'Hvordan teorien styrer valg i spillet.',
+    points: ['Norman: affordance, signifier, constraint, feedback.', 'De fire mikrointeraktioner fra A4-arkene.', 'Slut hvert svar med en minikonklusion.'],
+    link: [SITE + '/ddu/kompendium/norman', 'Normans designprincipper'],
+    list: questions('Hvordan svarer spillet, når spilleren gør én handling?') },
+  { ch: 3, id: 'maalgruppe-indkredsning', title: 'Målgruppe indkredsning', who: 'hrafn', goal: 400, short: 'Undersøg målgruppen grundigt.',
+    points: ['Hvad vil 16–20-årige have ud af en spilaften?', 'Hvilke hybridspil findes, og hvad lærer I af dem?', 'Slut med en konkret konsekvens for spillet.'],
+    list: questions('Hvilke hybridspil findes, og hvad kan vi lære af dem?') },
+  { ch: 3, id: 'prototypeliste', title: 'Prototypeliste', who: 'asbjorn', goal: 150, short: 'Alle de dele I bygger og tester.',
+    points: ['Én række per prototype eller byggebid.', 'Små bidder, så hver del kan testes.', 'Alle rækker har en ansvarlig.'],
+    list: { kind: 'table', title: 'Prototyper', one: 'Prototype', add: 'Tilføj prototype', fields: [
+      { k: 'proto', label: 'Prototype', type: 'line', w: 130, ph: 'Spillebræt v1' },
+      { k: 'besk', label: 'Beskrivelse', type: 'line', w: 160 },
+      { k: 'mat', label: 'Materialer', type: 'line', w: 125, ph: 'MDF 4 mm' },
+      { k: 'funk', label: 'Funktionalitet', type: 'line', w: 140 },
+      { k: 'opl', label: 'Oplevelse', type: 'line', w: 130 },
+      who('Ansvarlig', { w: 115 }),
+    ] } },
+  { ch: 3, id: 'forproduktion', title: 'Forproduktion', who: ALL, goal: 600, short: 'Planlægningen før I bygger.',
+    points: ['UI (Tobias): moodboard, designmanual, tegninger.', 'UX (Sebastian): brugerrejse, feedbackskitser.', 'PRO/QA (Hrafn): kode-flowchart, forsøg, testmanual.', 'PL (Asbjørn): tidsplan passer med prototypelisten.'],
+    link: [SITE + '/ddu/minikurser/designmanual', 'Minikursus: designmanual'] },
+  { ch: 3, id: 'produktion', title: 'Produktion', who: ALL, goal: 600, short: 'Byg prototyperne og saml spillet.',
+    points: ['UI: laser, 3D-print og samling, med fotos.', 'UX: feedback og flow i det I bygger.', 'PRO/QA: kode, funktionstest, fejlliste.'] },
+  { ch: 3, id: 'test', title: 'Test', who: 'hrafn', goal: 500, short: 'Den store test af det spilbare spil.',
+    points: ['Playtesten 13. november.', 'Metode: playtesting, thinking aloud eller SUS.', 'Rettelserne i tabellen, den vigtigste øverst.'], link: [SITE + '/ddu/testmetoder', 'Testmetoder'],
+    list: { kind: 'table', title: 'Rettelser, vigtigste først', one: 'Rettelse', add: 'Tilføj rettelse', fields: [
+      { k: 'prob', label: 'Problem', type: 'line', w: 240 },
+      { k: 'ret', label: 'Rettelse', type: 'line', w: 240 },
+      who(),
+    ] } },
+
+  { ch: 4, id: 'praesentation', title: 'Præsentation', who: ALL, goal: 200, short: 'Det færdige spil, vist frem.',
+    points: ['Fotos af det færdige spil.', 'Hvad er rettet siden playtesten?'] },
+  { ch: 4, id: 'kortlaegning', title: 'Fremtidig kortlægning', who: 'asbjorn', goal: 200, short: 'Hvad næste version skulle have.',
+    points: ['Det I skar fra: kommer det med næste gang?', 'Fund I ikke nåede at rette.'],
+    list: { kind: 'bullets', title: 'Til næste version', one: 'Idé', add: 'Tilføj idé', fields: [
+      { k: 't', label: 'Idé', type: 'line', ph: 'Fx lyd fra brættet når en brik bliver slået' },
+    ] } },
+  { ch: 4, id: 'afslutning', title: 'Afslutning', who: 'asbjorn', goal: 350, short: 'Svar på problemformuleringen.',
+    points: ['Svar direkte på spørgsmålet.', 'Hvad gik godt, og hvad ville I gøre anderledes?'] },
+];
+const DAYS = [
+  ['2026-09-10', 'Brætspillet som koncept', ['indledning', 'problemformulering']],
+  ['2026-09-17', 'Grupper og konceptvideo', ['idebeskrivelse', 'papirprototype']],
+  ['2026-09-18', 'Test på HCØ Gymnasiet', ['rapid-test']],
+  ['2026-10-01', 'Testvideo', ['rapid-test']],
+  ['2026-10-22', 'Prototypeliste og Norman', ['prototypeliste', 'teoretiske-vinkler']],
+  ['2026-10-29', 'To spor: forsøg og moodboard', ['tekniske-spoergsmaal', 'forproduktion']],
+  ['2026-11-05', 'Fysisk produktion', ['prototypeliste', 'produktion']],
+  ['2026-11-06', 'Tekniske tegninger', ['forproduktion']],
+  ['2026-11-12', 'Integration', ['produktion']],
+  ['2026-11-13', 'Playtest', ['test', 'kortlaegning']],
+];
+
+const state = { docs: {}, filter: null, db: null, loaded: false, openId: null, items: [], dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const pawn = (who) => `<svg class="pawn" style="--pc:var(--p-${who})" aria-hidden="true"><use href="#pawn"/></svg>`;
+const sec = (id) => SECTIONS.find((s) => s.id === id);
+const chap = (s) => CHAPTERS.find((c) => c.n === s.ch);
+const numOf = (s) => `${s.ch}.${SECTIONS.filter((x) => x.ch === s.ch).indexOf(s) + 1}`;
+const docOf = (id) => state.docs[id] || {};
+const whoOf = (s) => docOf(s.id).who || s.who;
+const textOf = (id) => docOf(id).text || '';
+const itemsOf = (id) => (Array.isArray(docOf(id).items) ? docOf(id).items : []);
+const whoName = (id) => (id === ALL ? 'Alle' : PEOPLE.find((p) => p.id === id)?.name ?? 'Alle');
+const whoLabel = (id) => (!id ? '' : id === ALL ? 'Hele gruppen' : PEOPLE.find((p) => p.id === id)?.name ?? '');
+const words = (t) => (t.replace(/[*_#-]/g, ' ').match(/[\p{L}\p{N}]+/gu) || []).length;
+const filled = (s, it) => s.list.fields.some((f) => f.type !== 'who' && String(it?.[f.k] ?? '').trim());
+const cleanItems = (s, items) => (s.list ? items.filter((it) => filled(s, it)) : []);
+const itemWords = (s, items) => (s.list ? words(cleanItems(s, items).map((it) => s.list.fields.filter((f) => f.type !== 'who').map((f) => it[f.k] || '').join(' ')).join(' ')) : 0);
+const wordsOf = (s) => words(textOf(s.id)) + itemWords(s, itemsOf(s.id));
+const statusOf = (s) => (docOf(s.id).done ? 'done' : wordsOf(s) ? 'doing' : 'todo');
+const KIND = { table: 'Tabel', cards: 'Liste', bullets: 'Liste' };
+
+function renderPlayers() {
+  $('#players').innerHTML = PEOPLE.map((p) => `<button type="button" class="player" data-p="${p.id}" style="--pc:var(--p-${p.id})" aria-pressed="${state.filter === p.id}">${pawn(p.id)}<span>${esc(p.name)}<small>${esc(p.role)}</small></span></button>`).join('');
+  $('#players').querySelectorAll('.player').forEach((b) => b.addEventListener('click', () => {
+    state.filter = state.filter === b.dataset.p ? null : b.dataset.p;
+    try { localStorage.setItem('rb-filter', state.filter || ''); } catch {}
+    renderPlayers(); renderBoard();
+  }));
+}
+
+function renderBoard() {
+  $('#board').innerHTML = CHAPTERS.map((c) => `
+    <section class="chapter" style="--hue:var(--${c.hue});--soft:var(--${c.hue}-soft)">
+      <div class="chapter-head"><span class="badge">${c.n}</span><div><h2>${esc(c.title)}</h2><p>${esc(c.sub)}</p></div></div>
+      <div class="squares">${SECTIONS.filter((s) => s.ch === c.n).map((s) => {
+        const st = statusOf(s); const w = whoOf(s); const n = wordsOf(s);
+        const dim = state.filter && w !== ALL && w !== state.filter;
+        const rows = s.list ? cleanItems(s, itemsOf(s.id)).length : 0;
+        const kind = s.list ? `<span class="kind">${KIND[s.list.kind]}${rows ? ` · ${rows} ${rows === 1 ? s.list.one.toLowerCase() : 'stk.'}` : ''}</span>` : '';
+        return `<button type="button" class="sq ${st}${dim ? ' dim' : ''}" data-id="${s.id}" aria-label="${esc(s.title)}, ${st === 'done' ? 'færdig' : st === 'doing' ? 'i gang' : 'ikke startet'}, ${esc(whoName(w))}">
+          <span class="top"><span class="num">${numOf(s)}</span><span class="mark ${st}"></span></span>
+          <span style="display:grid;gap:2px;align-content:start"><span class="name">${esc(s.title)}</span>${kind}</span>
+          <span class="foot" style="--pc:var(--p-${w})">${pawn(w)}<span class="meter"><b style="--w:${Math.min(100, Math.round(n / s.goal * 100))}%"></b></span><span class="words">${n}/${s.goal}</span></span>
+        </button>`;
+      }).join('')}</div>
+    </section>`).join('');
+  $('#board').querySelectorAll('.sq').forEach((b) => b.addEventListener('click', () => openSheet(b.dataset.id)));
+  renderScore();
+}
+
+function renderScore() {
+  const done = SECTIONS.filter((s) => statusOf(s) === 'done').length;
+  const doing = SECTIONS.filter((s) => statusOf(s) === 'doing').length;
+  $('#score').textContent = done === SECTIONS.length ? 'Alle felter færdige. I er i mål!' : `${done} af ${SECTIONS.length} felter færdige`;
+  const order = [...SECTIONS.filter((s) => statusOf(s) === 'done'), ...SECTIONS.filter((s) => statusOf(s) === 'doing'), ...SECTIONS.filter((s) => statusOf(s) === 'todo')];
+  $('#track').innerHTML = order.map((s) => `<i class="${statusOf(s)}"></i>`).join('') + '<i title="Mål"></i>' +
+    `<svg class="pawn runner" style="left:calc(${(done + 0.5) / (SECTIONS.length + 1) * 100}%)" aria-hidden="true"><use href="#pawn"/></svg>`;
+  if (state.loaded && !$('#sync').dataset.fixed) $('#sync').textContent = `${doing} i gang · ${SECTIONS.length - done - doing} ikke startet`;
+}
+
+function renderToday() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const t = (iso) => new Date(iso + 'T00:00:00').getTime();
+  const i = DAYS.findIndex(([d]) => t(d) >= today.getTime());
+  const isToday = i >= 0 && t(DAYS[i][0]) === today.getTime();
+  if (i === -1) {
+    $('#today').innerHTML = '<b>Tredje iteration</b><span class="when">Test, rettelser og færdiggørelse</span><span class="go"></span>';
+  } else {
+    const [d, label, ids] = DAYS[i];
+    const when = new Date(d + 'T12:00:00').toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('#today').innerHTML = `<span class="when">${isToday ? 'I dag' : 'Næste gang'} · ${when}</span><b>${esc(label)}</b><span class="go">${ids.map((id) => `<button type="button" data-id="${id}">${esc(sec(id).title)} →</button>`).join('')}</span>`;
+    $('#today').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => openSheet(b.dataset.id)));
+  }
+  $('#plan').innerHTML = DAYS.map(([d, label, ids], n) => `<li class="${t(d) < today.getTime() ? 'past' : ''}${n === i ? ' now' : ''}"><span class="d">${new Date(d + 'T12:00:00').toLocaleDateString('da-DK', { day: 'numeric', month: 'short' })}</span><span>${esc(label)} <span style="color:var(--muted);font-weight:400">→ ${ids.map((id) => esc(sec(id).title)).join(', ')}</span></span></li>`).join('') +
+    '<li><span class="d">Senere</span><span>Tredje iteration: test, rettelser og færdiggørelse</span></li>';
+}
+
+// ---------- writing sheet ----------
+const sheet = $('#sheet');
+const ta = $('#sText');
+const listEl = $('#sList');
+const grow = (el) => { if (el.tagName !== 'TEXTAREA') return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; };
+const blankItem = (s) => Object.fromEntries(s.list.fields.map((f) => [f.k, '']));
+
+function openSheet(id) {
+  if (state.openId && state.openId !== id) flush();
+  const s = sec(id); const c = chap(s);
+  state.openId = id; state.dirty = false; state.lastField = ta;
+  sheet.style.setProperty('--hue', `var(--${c.hue})`);
+  sheet.style.setProperty('--soft', `var(--${c.hue}-soft)`);
+  sheet.classList.toggle('structured', Boolean(s.list));
+  sheet.classList.toggle('wide', s.list?.kind === 'table' && s.list.fields.length > 3);
+  $('#sNum').textContent = numOf(s);
+  $('#sTitle').textContent = s.title;
+  $('#sGuide').innerHTML = `
+    <p class="short">${esc(s.short)}</p>
+    <div><h4>Det skal stå her</h4><ul>${s.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>
+    ${s.example ? `<div><h4>Eksempel</h4><blockquote>${esc(s.example)}</blockquote></div>` : ''}
+    <div class="links"><a href="${SITE}/ddu/rapportskabelon#${s.id}" target="_blank" rel="noopener">Se rapportskabelonen ↗</a>${s.link ? `<a href="${s.link[0]}" target="_blank" rel="noopener">${esc(s.link[1])} ↗</a>` : ''}</div>`;
+  $('#sWho').innerHTML = [[ALL, 'Hele gruppen'], ...PEOPLE.map((p) => [p.id, p.name])].map(([v, t]) => `<option value="${v}"${v === whoOf(s) ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  ta.value = textOf(id);
+  ta.style.height = '';
+  ta.placeholder = s.list ? `Indledende tekst, hvis I har brug for det. ${s.list.kind === 'table' ? 'Tabellen' : 'Listen'} kommer under.` : 'Skriv løs. Én linje er ét afsnit i Word.';
+  loadItems(s);
+  $('#sHow').hidden = true;
+  sendLabel();
+  $('#sSaved').textContent = state.db ? 'Gemmes automatisk' : 'Gemmes kun i din browser';
+  if (!sheet.open) sheet.showModal();
+  renderList();
+  updateSheetMeta();
+  $('#sCanvas').scrollTop = 0;
+  ta.focus({ preventScroll: true });
+}
+
+function loadItems(s) {
+  state.items = s.list ? itemsOf(s.id).map((it) => ({ ...blankItem(s), ...it })) : [];
+  if (s.list && !state.items.length) state.items.push(blankItem(s));
+}
+
+// ---------- lists and tables ----------
+function fieldInput(s, f, it, i, attrs = '') {
+  const data = `data-i="${i}" data-k="${f.k}" id="f-${s.id}-${i}-${f.k}" ${attrs}`;
+  const v = it[f.k] ?? '';
+  if (f.type === 'who') {
+    const opts = [['', '–'], [ALL, 'Hele gruppen'], ...PEOPLE.map((p) => [p.id, p.name])];
+    return `<select class="cell" ${data} aria-label="${esc(f.label)}">${opts.map(([o, t]) => `<option value="${o}"${o === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  }
+  if (s.list.kind === 'bullets') return `<input class="cell" type="text" ${data} value="${esc(v)}" placeholder="${esc(f.ph || '')}" aria-label="${esc(f.label)}" spellcheck="true" data-enter="next">`;
+  const rows = f.type === 'line' ? 1 : 3;
+  return `<textarea class="cell" rows="${rows}" ${data} placeholder="${esc(f.ph || '')}" aria-label="${esc(f.label)}" spellcheck="true"${s.list.kind === 'table' ? ' data-enter="next"' : ''}>${esc(v)}</textarea>`;
+}
+
+function rowButtons(s, i) {
+  const n = state.items.length;
+  return `<button type="button" class="ib" data-act="up" data-i="${i}" aria-label="Flyt op"${i === 0 ? ' disabled' : ''}>↑</button>` +
+    `<button type="button" class="ib" data-act="down" data-i="${i}" aria-label="Flyt ned"${i === n - 1 ? ' disabled' : ''}>↓</button>` +
+    `<button type="button" class="ib" data-act="del" data-i="${i}" aria-label="Slet ${esc(s.list.one.toLowerCase())} ${i + 1}">×</button>`;
+}
+
+function renderList() {
+  const s = sec(state.openId);
+  listEl.hidden = !s?.list;
+  if (!s?.list) return;
+  const L = s.list;
+  const count = cleanItems(s, state.items).length;
+  let body;
+  if (L.kind === 'table') {
+    body = `<div class="tbl-wrap"><table class="grid">
+      <thead><tr><th class="n">#</th>${L.fields.map((f) => `<th style="min-width:${f.w || 140}px">${esc(f.label)}</th>`).join('')}<th><span hidden>Flyt og slet</span></th></tr></thead>
+      <tbody>${state.items.map((it, i) => `<tr><td class="n"><i>${esc(L.one)} </i>${i + 1}</td>${L.fields.map((f) => `<td data-label="${esc(f.label)}">${fieldInput(s, f, it, i)}</td>`).join('')}<td class="row-act">${rowButtons(s, i)}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  } else if (L.kind === 'cards') {
+    const [head, ...rest] = L.fields;
+    const pick = rest.find((f) => f.type === 'who');
+    const field = (f, it, i) => `<label class="f"><span>${esc(f.label)}</span>${fieldInput(s, f, it, i)}</label>`;
+    body = `<ol class="cards">${state.items.map((it, i) => `<li class="card">
+      <div class="card-top"><b>${esc(L.one)} ${i + 1}</b>${rowButtons(s, i)}</div>
+      <div class="f-row">${field(head, it, i)}${pick ? field(pick, it, i) : ''}</div>
+      ${rest.filter((f) => f !== pick).map((f) => field(f, it, i)).join('')}
+    </li>`).join('')}</ol>`;
+  } else {
+    body = `<ol class="bul">${state.items.map((it, i) => `<li>${fieldInput(s, L.fields[0], it, i)}<button type="button" class="ib" data-act="del" data-i="${i}" aria-label="Slet ${esc(L.one.toLowerCase())} ${i + 1}">×</button></li>`).join('')}</ol>`;
+  }
+  const hint = L.kind === 'cards' ? '' : '<span class="items-hint">Enter giver en ny række</span>';
+  listEl.innerHTML = `<div class="items-head"><h3>${esc(L.title)}</h3><span id="sCount">${count} ${count === 1 ? esc(L.one.toLowerCase()) : 'i alt'}</span>${hint}</div>${body}<button type="button" class="add" data-act="add">+ ${esc(L.add)}</button>`;
+  requestAnimationFrame(() => { grow(ta); listEl.querySelectorAll('textarea.cell').forEach(grow); });
+}
+
+function focusField(i, k) {
+  const s = sec(state.openId);
+  const el = listEl.querySelector(`[data-i="${i}"][data-k="${k || s.list.fields[0].k}"]`);
+  if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
+}
+
+function edited() {
+  state.dirty = true; updateSheetMeta();
+  $('#sSaved').textContent = 'Skriver…';
+  clearTimeout(state.timer);
+  state.timer = setTimeout(flush, 1200);
+}
+
+listEl.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-k]'); if (!el) return;
+  const it = state.items[Number(el.dataset.i)]; if (!it) return;
+  it[el.dataset.k] = el.value;
+  grow(el);
+  const s = sec(state.openId); const n = cleanItems(s, state.items).length;
+  const c = $('#sCount'); if (c) c.textContent = `${n} ${n === 1 ? s.list.one.toLowerCase() : 'i alt'}`;
+  edited();
+});
+
+listEl.addEventListener('keydown', (e) => {
+  const el = e.target.closest('[data-enter]');
+  if (!el || e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+  e.preventDefault();
+  const i = Number(el.dataset.i);
+  if (i === state.items.length - 1) addItem(i + 1, el.dataset.k);
+  else focusField(i + 1, el.dataset.k);
+});
+
+listEl.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const s = sec(state.openId); const i = Number(b.dataset.i);
+  if (b.dataset.act === 'add') return addItem(state.items.length);
+  if (b.dataset.act === 'up' || b.dataset.act === 'down') {
+    const j = b.dataset.act === 'up' ? i - 1 : i + 1;
+    if (j < 0 || j >= state.items.length) return;
+    [state.items[i], state.items[j]] = [state.items[j], state.items[i]];
+    renderList(); edited();
+    const again = listEl.querySelector(`button[data-act="${b.dataset.act}"][data-i="${j}"]`);
+    (again && !again.disabled ? again : listEl.querySelector(`button[data-act="del"][data-i="${j}"]`))?.focus();
+    return;
+  }
+  if (b.dataset.act === 'del') {
+    // A row with text needs a second click, so nothing is lost by accident.
+    if (filled(s, state.items[i]) && !b.classList.contains('confirm')) {
+      b.classList.add('confirm'); b.textContent = 'Slet?';
+      setTimeout(() => { if (b.isConnected) { b.classList.remove('confirm'); b.textContent = '×'; } }, 3000);
+      return;
+    }
+    state.items.splice(i, 1);
+    if (!state.items.length) state.items.push(blankItem(s));
+    renderList(); edited();
+    focusField(Math.min(i, state.items.length - 1));
+  }
+});
+
+function addItem(at, k) {
+  const s = sec(state.openId);
+  state.items.splice(at, 0, blankItem(s));
+  renderList();
+  focusField(at, k);
+}
+
+// ---------- saving ----------
+function updateSheetMeta() {
+  const s = sec(state.openId); if (!s) return;
+  const n = words(ta.value) + itemWords(s, state.items);
+  $('#sWords').textContent = `${n} ord`;
+  $('#sGoal').textContent = `mål ~${s.goal}`;
+  $('#sMeter').style.setProperty('--w', `${Math.min(100, Math.round(n / s.goal * 100))}%`);
+  $('#sMeter').parentElement.style.setProperty('--hue', n >= s.goal ? 'var(--done)' : '');
+  const done = Boolean(docOf(s.id).done);
+  $('#sDone').textContent = done ? 'Færdig ✓' : 'Marker som færdig';
+  $('#sDone').classList.toggle('done-on', done);
+}
+
+function patch(id, fields) {
+  const s = sec(id);
+  const next = { text: textOf(id), done: Boolean(docOf(id).done), who: whoOf(s), ...fields };
+  if (s.list) next.items = fields.items ?? itemsOf(id);
+  state.docs[id] = next;
+  renderBoard();
+  if (state.openId === id) updateSheetMeta();
+  return persist(id, next);
+}
+
+function persist(id, data) {
+  if (!state.db) { try { localStorage.setItem('rb-docs', JSON.stringify(state.docs)); } catch {} return Promise.resolve(); }
+  $('#sSaved').textContent = 'Gemmer…';
+  // One write at a time.
+  state.saving = state.saving.then(() => state.db.collection('sections').doc(id).set(data)).then(
+    () => { if (state.openId === id && !state.dirty) $('#sSaved').textContent = 'Gemt for hele gruppen ✓'; },
+    (e) => { $('#sSaved').textContent = e?.code === 'permission-denied' ? 'Databasen afviste teksten. Er den for lang?' :'Kunne ikke gemme. Prøv igen.'; });
+  return state.saving;
+}
+
+function flush() {
+  if (!state.dirty || !state.openId) return;
+  clearTimeout(state.timer); state.dirty = false;
+  const s = sec(state.openId);
+  patch(state.openId, s.list ? { text: ta.value, items: cleanItems(s, state.items) } : { text: ta.value });
+}
+
+ta.addEventListener('input', () => { if (sheet.classList.contains('structured')) grow(ta); edited(); });
+
+// ---------- formatting buttons work on the last box you typed in ----------
+$('#sCanvas').addEventListener('focusin', (e) => {
+  if (e.target === ta || e.target.matches('textarea.cell, input.cell')) state.lastField = e.target;
+});
+function wrapSel(el, mark) {
+  const { selectionStart: a, selectionEnd: b, value: v } = el;
+  const sel = v.slice(a, b) || 'tekst';
+  el.setRangeText(mark + sel + mark, a, b, 'end');
+  el.setSelectionRange(a + mark.length, a + mark.length + sel.length);
+}
+function bullets(el) {
+  const { selectionStart: a, selectionEnd: b, value: v } = el;
+  const start = v.lastIndexOf('\n', a - 1) + 1;
+  const end = b > a ? b : (v.indexOf('\n', a) === -1 ? v.length : v.indexOf('\n', a));
+  const block = v.slice(start, end).split('\n').map((l) => (l.startsWith('- ') ? l : '- ' + l)).join('\n');
+  el.setRangeText(block, start, end, 'end');
+}
+document.querySelectorAll('.fmt').forEach((b) => b.addEventListener('click', () => {
+  const el = state.lastField?.isConnected ? state.lastField : ta;
+  el.focus();
+  if (b.dataset.fmt === 'b') wrapSel(el, '**');
+  else if (b.dataset.fmt === 'i') wrapSel(el, '*');
+  else if (el === ta) bullets(el);
+  else return;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}));
+
+$('#sWho').addEventListener('change', (e) => { flush(); patch(state.openId, { who: e.target.value }); });
+$('#sDone').addEventListener('click', () => { flush(); patch(state.openId, { done: !docOf(state.openId).done }); });
+$('#sClose').addEventListener('click', () => sheet.close());
+sheet.addEventListener('close', () => { flush(); state.openId = null; });
+// Close on a backdrop click, but not when a text selection that started inside ends outside.
+let downOnBackdrop = false;
+sheet.addEventListener('pointerdown', (e) => { downOnBackdrop = e.target === sheet; });
+sheet.addEventListener('click', (e) => { if (e.target === sheet && downOnBackdrop) sheet.close(); downOnBackdrop = false; });
+
+// ---------- copy to Word ----------
+const oneLine = (v) => String(v ?? '').replace(/\s*\n+\s*/g, ' ').trim();
+function listMarkdown(s, items) {
+  const L = s.list; const rows = cleanItems(s, items);
+  if (!rows.length) return '';
+  const val = (f, it) => (f.type === 'who' ? whoLabel(it[f.k]) : it[f.k] || '');
+  if (L.kind === 'bullets') return rows.map((it) => `- ${oneLine(it[L.fields[0].k])}`).join('\n');
+  if (L.kind === 'table') {
+    const row = (cells) => `| ${cells.map((c) => oneLine(c).replace(/\|/g, '/') || ' ').join(' | ')} |`;
+    return [row(L.fields.map((f) => f.label)), row(L.fields.map(() => '---')), ...rows.map((it) => row(L.fields.map((f) => val(f, it))))].join('\n');
+  }
+  const [head, ...rest] = L.fields;
+  return rows.map((it, i) => {
+    const pick = rest.find((f) => f.type === 'who');
+    const name = pick ? whoLabel(it[pick.k]) : '';
+    const out = [`**${oneLine(it[head.k]) || `${L.one} ${i + 1}`}**${name ? ` (${pick.bare ? name : `${pick.label}: ${name}`})` : ''}`];
+    for (const f of rest) {
+      const v = String(it[f.k] ?? '').trim();
+      if (!v || f.type === 'who') continue;
+      const lines = v.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (f.type === 'lines') out.push(`*${f.label}:*`, ...lines.map((l) => `- ${l.replace(/^[-•*]\s*/, '')}`));
+      else if (f.plain) out.push(...lines);
+      else out.push(`*${f.label}:* ${lines[0]}`, ...lines.slice(1));
+    }
+    return out.join('\n');
+  }).join('\n\n');
+}
+
+// ---------- send straight to the bot ----------
+// With a webhook from the report channel saved, the button posts the text there and the bot picks it up.
+// The webhook link is kept only in this browser, so it never ends up in the page's code.
+const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+const webhook = () => { try { const u = localStorage.getItem('rb-webhook') || ''; return WEBHOOK_RE.test(u) ? u : ''; } catch { return ''; } };
+const sendLabel = () => { $('#sCopy').textContent = webhook() ? 'Send til Word' : 'Kopiér til Word'; };
+
+async function sendToBot(s, payload) {
+  const form = new FormData();
+  const message = { username: 'Rapportbrættet', allowed_mentions: { parse: [] } };
+  // Discord allows 2000 characters per message, so longer text goes as message.txt, which the bot also reads.
+  if (payload.length <= 2000) message.content = payload;
+  else {
+    message.content = `Rapportbrættet sender **${s.title}** (lang tekst, se filen)`;
+    form.append('files[0]', new Blob([payload], { type: 'text/plain' }), 'message.txt');
+  }
+  form.append('payload_json', JSON.stringify(message));
+  // Discord's answer can't be read from another site, so a sent request counts as delivered.
+  await fetch(webhook(), { method: 'POST', body: form, mode: 'no-cors' });
+}
+
+const webhookForm = (open) => `<details class="hook"${open ? ' open' : ''}><summary>${webhook() ? 'Skift eller fjern Discord-webhook' : 'Spring kopieringen over næste gang'}</summary>
+  <p>Discord: rapport-kanalen → Rediger kanal → Integrationer → Webhooks → Ny webhook → <b>Kopiér webhook-URL</b>. Indsæt den her, så sender knappen direkte til botten. Linket gemmes kun i din browser.</p>
+  <div class="hook-row"><input type="url" id="hookUrl" placeholder="https://discord.com/api/webhooks/…" aria-label="Discord-webhook" value="${esc(webhook())}"><button type="button" class="btn" data-hook="save">Gem</button>${webhook() ? '<button type="button" class="btn" data-hook="clear">Fjern</button>' : ''}</div>
+  <span class="hook-msg" id="hookMsg"></span></details>`;
+
+$('#sHow').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-hook]'); if (!b) return;
+  const url = b.dataset.hook === 'clear' ? '' : $('#hookUrl').value.trim();
+  if (url && !WEBHOOK_RE.test(url)) { $('#hookMsg').textContent = 'Det ligner ikke et Discord-webhook-link.'; return; }
+  try { url ? localStorage.setItem('rb-webhook', url) : localStorage.removeItem('rb-webhook'); } catch { $('#hookMsg').textContent = 'Din browser vil ikke gemme det.'; return; }
+  sendLabel();
+  $('#sHow').innerHTML = url ? '<b>Gemt.</b> Tryk <b>Send til Word</b>, så går teksten direkte til botten.' : '<b>Fjernet.</b> Knappen kopierer teksten igen.';
+});
+
+function copyForDiscord(payload, note = '') {
+  const how = $('#sHow');
+  const steps = `<ol><li>Åbn din DM med <b>Report Helper</b>-botten i Discord.</li><li>Indsæt med <b>Ctrl+V</b> og send. Lang tekst bliver til en fil. Det er fint.</li><li>Botten svarer ✏️ når teksten står i Word.</li></ol>`;
+  const showBox = () => {
+    how.innerHTML = `${note}<b>Kopiér teksten herunder</b> (den er markeret).${steps}<textarea class="copybox" id="copyBox" readonly aria-label="Tekst til Word"></textarea>${webhookForm(false)}`;
+    const box = $('#copyBox'); box.value = payload; box.focus(); box.select();
+  };
+  try {
+    navigator.clipboard.writeText(payload).then(
+      () => { how.innerHTML = `${note}<b>Kopieret! Nu mangler kun Discord:</b>${steps}${webhookForm(false)}`; },
+      showBox);
+  } catch { showBox(); }
+}
+
+$('#sCopy').addEventListener('click', async () => {
+  flush();
+  const s = sec(state.openId);
+  const text = [ta.value.trim(), s.list ? listMarkdown(s, state.items) : ''].filter(Boolean).join('\n\n');
+  const how = $('#sHow');
+  how.hidden = false;
+  how.scrollIntoView({ block: 'nearest' });
+  if (!text) { how.innerHTML = `<b>Der er ingen tekst endnu.</b> ${s.list ? 'Skriv i teksten eller udfyld en række' : 'Skriv noget'} først, så kan det sendes til Word.`; return; }
+  const payload = `rapport:${s.id} (${s.title})\n${text}`;
+  if (!webhook()) return copyForDiscord(payload);
+  const btn = $('#sCopy');
+  btn.disabled = true; btn.textContent = 'Sender…';
+  try {
+    await sendToBot(s, payload);
+    how.innerHTML = `<b>Sendt til botten!</b> Den svarer ✏️ i rapport-kanalen, når teksten står i Word.${webhookForm(false)}`;
+  } catch {
+    copyForDiscord(payload, '<b>Kunne ikke sende direkte</b>, så teksten er kopieret i stedet. ');
+  } finally {
+    btn.disabled = false; sendLabel();
+  }
+});
+
+// ---------- start ----------
+try { state.filter = localStorage.getItem('rb-filter') || null; } catch {}
+renderPlayers(); renderToday(); renderBoard();
+
+// The group's text lives in Firestore, set up in firebase-config.js.
+// It is wrapped in the same small interface the board used on claude.ai.
+const FIREBASE = 'https://www.gstatic.com/firebasejs/10.12.2/';
+async function firebaseStore() {
+  let config;
+  try { ({ FIREBASE_CONFIG: config } = await import('./firebase-config.js')); } catch { return null; }
+  if (!config?.projectId) return null;
+  const [{ initializeApp }, fs] = await Promise.all([import(FIREBASE + 'firebase-app.js'), import(FIREBASE + 'firebase-firestore.js')]);
+  const fdb = fs.getFirestore(initializeApp(config));
+  return {
+    collection: (name) => ({
+      doc: (id) => ({ set: (data) => fs.setDoc(fs.doc(fdb, name, id), data) }),
+      onSnapshot: (next, fail) => fs.onSnapshot(fs.collection(fdb, name),
+        (snap) => next({ docs: snap.docs.map((d) => ({ id: d.id, data: () => d.data() })) }), fail),
+    }),
+  };
+}
+
+(async () => {
+  const db = await firebaseStore().catch((e) => { console.error(e); return null; });
+  state.loaded = true;
+  if (!db) {
+    try { state.docs = JSON.parse(localStorage.getItem('rb-docs') || '{}'); } catch {}
+    const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Kun gemt i din browser';
+    renderBoard();
+    return;
+  }
+  state.db = db;
+  db.collection('sections').onSnapshot((snap) => {
+    const docs = {};
+    snap.docs.forEach((d) => { docs[d.id] = d.data(); });
+    state.docs = docs;
+    renderBoard();
+    const s = state.openId && sec(state.openId);
+    // Show someone else's changes in the open sheet, unless you are typing in it right now.
+    if (s && !state.dirty && !$('#sCanvas').contains(document.activeElement)) {
+      if (ta.value !== textOf(s.id)) { ta.value = textOf(s.id); grow(ta); }
+      if (s.list && JSON.stringify(cleanItems(s, state.items)) !== JSON.stringify(itemsOf(s.id))) { loadItems(s); renderList(); }
+    }
+    if (state.openId) updateSheetMeta();
+  }, () => { const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Den fælles tekst kunne ikke hentes'; });
+})();
+</script>
+
+</body></html>
