@@ -223,7 +223,30 @@ table.grid { border-collapse: collapse; width: 100%; }
 .bul li { display: flex; align-items: center; gap: 6px; }
 .bul li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); flex: none; }
 
+/* The report as it stands in Word: one paper page fed by the bot's "report" collection. */
+.word-view { display: grid; gap: 14px; }
+.word-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.word-top p { font-size: 14px; color: var(--muted); }
+.desk { background: color-mix(in srgb, var(--ink) 8%, var(--bg)); border-radius: 18px; padding: 24px 16px; max-height: min(900px, 85vh); overflow-y: auto; }
+.page { max-width: 760px; margin: 0 auto; background: #fff; color: #1d1d1d; padding: 64px 72px 80px; box-shadow: 0 1px 3px rgba(0,0,0,.18), 0 12px 32px -12px rgba(0,0,0,.3); font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; font-size: 15px; line-height: 1.55; }
+.page .doc-title { font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; letter-spacing: 0; font-size: 34px; font-weight: 700; margin-bottom: 4px; }
+.page .doc-sub { color: #5b5b5b; margin-bottom: 40px; }
+.page h2 { font-family: inherit; font-size: 24px; font-weight: 700; color: #1f3864; margin: 36px 0 10px; }
+.page h3 { font-family: inherit; font-size: 18px; font-weight: 700; color: #2f5496; margin: 24px 0 6px; }
+.page h3 button { all: unset; cursor: pointer; }
+.page h3 button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.page h3 button:focus-visible { outline: 3px solid #5a48d6; outline-offset: 2px; }
+.page h3 .wordtag { vertical-align: middle; margin-left: 8px; font-family: var(--body); }
+.page p, .page ul { margin: 0 0 8px; }
+.page ul { padding-left: 24px; }
+.page .empty { color: #8a8a8a; font-style: italic; }
+.page .gone { color: #b3361b; font-style: italic; }
+.word-note { font-size: 13px; color: var(--muted); }
+
 @media (max-width: 760px) {
+  .desk { padding: 12px 8px; border-radius: 14px; }
+  .page { padding: 28px 20px 40px; font-size: 15px; }
+  .page .doc-title { font-size: 26px; }
   .steps { grid-template-columns: minmax(0, 1fr); }
   .squares { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .sq { min-height: 120px; padding: 12px; }
@@ -284,6 +307,12 @@ table.grid { border-collapse: collapse; width: 100%; }
   </div>
 
   <main id="board" style="display:grid;gap:36px"></main>
+
+  <section class="word-view" aria-labelledby="wordTitle">
+    <div class="word-top"><h2 class="section-title" id="wordTitle">Rapporten i Word lige nu</h2><p id="wordStat">Henter Word-teksten…</p></div>
+    <div class="desk"><article class="page" id="wordPage" lang="da"></article></div>
+    <p class="word-note">Viser teksten, som botten læser den fra Word. Billeder, tabeller og links står kun i selve Word-filen. Klik en overskrift for at åbne feltet.</p>
+  </section>
 
   <section style="display:grid;gap:14px" aria-labelledby="howTitle">
     <h2 class="section-title" id="howTitle">Sådan kommer teksten i Word</h2>
@@ -574,6 +603,44 @@ function renderToday() {
   $('#plan').innerHTML = DAYS.map(([d, label, ids], n) => `<li class="${t(d) < today.getTime() ? 'past' : ''}${n === i ? ' now' : ''}"><span class="d">${new Date(d + 'T12:00:00').toLocaleDateString('da-DK', { day: 'numeric', month: 'short' })}</span><span>${esc(label)} <span style="color:var(--muted);font-weight:400">→ ${ids.map((id) => esc(sec(id).title)).join(', ')}</span></span></li>`).join('') +
     '<li><span class="d">Senere</span><span>Tredje iteration: test, rettelser og færdiggørelse</span></li>';
 }
+
+// ---------- the report as it stands in Word ----------
+// The bot's text is one paragraph per line, with **bold**, *italic* and "- " bullets.
+const inline = (t) => esc(t.replace(/\t/g, ' '))
+  .replace(/\*\*\*(.+?)\*\*\*/g, '<b><i>$1</i></b>')
+  .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+  .replace(/\*(.+?)\*/g, '<i>$1</i>');
+function wordHtml(text) {
+  let out = ''; let list = false;
+  for (const line of text.split('\n')) {
+    const bullet = /^\s*[-•]\s+/.test(line);
+    if (bullet !== list) { out += bullet ? '<ul>' : '</ul>'; list = bullet; }
+    out += bullet ? `<li>${inline(line.replace(/^\s*[-•]\s+/, ''))}</li>` : `<p>${inline(line)}</p>`;
+  }
+  return out + (list ? '</ul>' : '');
+}
+
+function renderWord() {
+  const known = SECTIONS.filter((s) => state.word[s.id]);
+  const page = $('#wordPage');
+  if (!known.length) {
+    $('#wordStat').textContent = state.loaded ? 'Botten har ikke sendt Word-teksten endnu' : 'Henter Word-teksten…';
+    page.innerHTML = '<p class="empty">Når Report Helper kører, vises rapporten her.</p>';
+    return;
+  }
+  const withText = known.filter((s) => wordOf(s.id).text?.trim()).length;
+  const at = Math.max(...known.map((s) => wordOf(s.id).at?.toMillis?.() ?? 0));
+  const when = at ? new Date(at).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  $('#wordStat').textContent = `${withText} af ${SECTIONS.length} afsnit har tekst${when ? ` · opdateret ${when}` : ''}`;
+  page.innerHTML = `<h1 class="doc-title">Ashes &amp; Iron</h1><p class="doc-sub">DDU-rapport · Brætspil</p>` +
+    CHAPTERS.map((c) => `<h2>${c.n}. ${esc(c.title)}</h2>` + SECTIONS.filter((s) => s.ch === c.n).map((s) => {
+      const w = wordOf(s.id);
+      const st = wordStatus(s);
+      const body = !state.word[s.id] ? '' : !w.inWord ? '<p class="gone">Overskriften findes ikke i Word endnu.</p>' : w.text?.trim() ? wordHtml(w.text) : '<p class="empty">Ingen tekst endnu.</p>';
+      return `<h3><button type="button" data-id="${s.id}">${esc(w.number || numOf(s))} ${esc(s.title)}</button>${st === 'changed' ? wordTag(st) : ''}</h3>${body}`;
+    }).join('')).join('');
+}
+$('#wordPage').addEventListener('click', (e) => { const b = e.target.closest('button[data-id]'); if (b) openSheet(b.dataset.id); });
 
 // ---------- writing sheet ----------
 const sheet = $('#sheet');
@@ -930,7 +997,7 @@ $('#sCopy').addEventListener('click', async () => {
 
 // ---------- start ----------
 try { state.filter = localStorage.getItem('rb-filter') || null; } catch {}
-renderPlayers(); renderToday(); renderBoard();
+renderPlayers(); renderToday(); renderBoard(); renderWord();
 
 // The group's text lives in Firestore, set up in firebase-config.js.
 // It is wrapped in the same small interface the board used on claude.ai.
@@ -956,12 +1023,12 @@ async function firebaseStore() {
   if (!db) {
     try { state.docs = JSON.parse(localStorage.getItem('rb-docs') || '{}'); } catch {}
     const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Kun gemt i din browser';
-    renderBoard();
+    renderBoard(); renderWord();
     return;
   }
   state.db = db;
   const refresh = () => {
-    renderBoard();
+    renderBoard(); renderWord();
     const s = state.openId && sec(state.openId);
     // Show someone else's changes in the open sheet, unless you are typing in it right now.
     if (s && !state.dirty && !$('#sCanvas').contains(document.activeElement)) {
