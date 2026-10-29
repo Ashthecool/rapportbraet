@@ -185,6 +185,21 @@ dialog.structured #sText { flex: none; min-height: 96px; overflow: hidden; paddi
 #sPull.confirm { background: var(--danger); border-color: var(--danger); color: var(--paper); }
 .copybox { width: 100%; height: 90px; font-size: 13px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
 
+/* Files sent along to Discord, per question or per section */
+.fbox { display: grid; gap: 6px; }
+.fbox-head { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.files-hint { font-size: 14px; color: var(--muted); margin: 0; }
+.drop { display: block; position: relative; border: 2px dashed var(--line); border-radius: 10px; padding: 10px; text-align: center; font-size: 14px; color: var(--muted); cursor: pointer; }
+.drop b { color: var(--hue); }
+.drop:hover, .drop.over, .drop:focus-within { border-color: var(--hue); background: var(--soft); }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.file-list:empty { display: none; }
+.file-list li { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--line); border-radius: 10px; padding: 4px 4px 4px 6px; min-width: 0; }
+.file-list .thumb { width: 36px; height: 36px; flex: none; border-radius: 6px; object-fit: cover; background: var(--bg); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+.file-list .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.file-list .size { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 /* Lists and tables inside the sheet */
 .items { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 4px 20px 24px; min-width: 0; }
 .items-head { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--line); padding-top: 16px; }
@@ -352,6 +367,7 @@ table.grid { border-collapse: collapse; width: 100%; }
       <div class="canvas" id="sCanvas">
         <textarea id="sText" spellcheck="true" lang="da" aria-label="Tekst" placeholder="Skriv løs. Én linje er ét afsnit i Word."></textarea>
         <section class="items" id="sList" hidden></section>
+        <section class="items" id="sFiles" hidden></section>
       </div>
       <div class="bottom">
         <div class="goal"><span id="sWords">0 ord</span><span class="meter"><b id="sMeter"></b></span><span id="sGoal"></span></div>
@@ -458,19 +474,11 @@ const SECTIONS = [
     points: ['Ét spørgsmål per kort, med én ansvarlig.', 'Svar med jeres egne forsøg.', 'Slut hvert svar med en minikonklusion.'],
     example: 'Vores produkt skal bruge MQTT, så spillernes M5\'ere kan sende træk til hinanden. Det skal kunne ses på brættet, ikke kun i koden.',
     link: [SITE + '/forlob/2/sensorer-og-moduler', 'Sensorer og moduler'],
-    list: questions('Hvad er MQTT-protokollen?', [
-      'Hvad er en M5-controller?',
-      'Hvad er en digital knap?',
-      'Hvordan 3D-printer man?',
-      'Hvordan virker lasercut?',
-    ]) },
+    list: questions('Hvad er MQTT-protokollen?', ['Hvad er en M5-controller?']) },
   { ch: 3, id: 'teoretiske-vinkler', title: 'Teoretiske vinkler', who: 'sebastian', goal: 800, short: 'Hvordan teorien styrer valg i spillet.',
     points: ['Norman: affordance, signifier, constraint, feedback.', 'De fire mikrointeraktioner fra A4-arkene.', 'Slut hvert svar med en minikonklusion.'],
     link: [SITE + '/ddu/kompendium/norman', 'Normans designprincipper'],
-    list: questions('Hvordan svarer spillet, når spilleren gør én handling?', [
-      'Hvordan vil vi styrke vores affordance og feedback, så spilleren ved hvad man skal gøre?',
-      'Hvordan får vi spilleren til at interagere fysisk med vores spil på en sjov måde?',
-    ]) },
+    list: questions('Hvordan svarer spillet, når spilleren gør én handling?') },
   { ch: 3, id: 'maalgruppe-indkredsning', title: 'Målgruppe indkredsning', who: 'hrafn', goal: 400, short: 'Undersøg målgruppen grundigt.',
     points: ['Hvad vil 16–20-årige have ud af en spilaften?', 'Hvilke hybridspil findes, og hvad lærer I af dem?', 'Slut med en konkret konsekvens for spillet.'],
     list: questions('Hvilke hybridspil findes, og hvad kan vi lære af dem?') },
@@ -520,7 +528,7 @@ const DAYS = [
   ['2026-11-13', 'Playtest', ['test', 'kortlaegning']],
 ];
 
-const state = { docs: {}, word: {}, filter: null, db: null, loaded: false, openId: null, items: [], dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
+const state = { docs: {}, word: {}, filter: null, db: null, loaded: false, openId: null, items: [], files: {}, dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const pawn = (who) => `<svg class="pawn" style="--pc:var(--p-${who})" aria-hidden="true"><use href="#pawn"/></svg>`;
@@ -680,11 +688,13 @@ function openSheet(id) {
   ta.style.height = '';
   ta.placeholder = s.list ? `Indledende tekst, hvis I har brug for det. ${s.list.kind === 'table' ? 'Tabellen' : 'Listen'} kommer under.` : 'Skriv løs. Én linje er ét afsnit i Word.';
   loadItems(s);
+  state.fileMsg = '';
   $('#sHow').hidden = true;
   sendLabel();
   $('#sSaved').textContent = state.db ? 'Gemmes automatisk' : 'Gemmes kun i din browser';
   if (!sheet.open) sheet.showModal();
   renderList();
+  renderSectionFiles();
   updateSheetMeta();
   $('#sCanvas').scrollTop = 0;
   ta.focus({ preventScroll: true });
@@ -745,6 +755,7 @@ function renderList() {
       <div class="card-top"><b>${esc(L.one)} ${i + 1}</b>${rowButtons(s, i)}</div>
       <div class="f-row">${field(head, it, i)}${pick ? field(pick, it, i) : ''}</div>
       ${rest.filter((f) => f !== pick).map((f) => field(f, it, i)).join('')}
+      ${perQuestion(s) ? fileBox(i) : ''}
     </li>`).join('')}</ol>`;
   } else {
     body = `<ol class="bul">${state.items.map((it, i) => `<li>${fieldInput(s, L.fields[0], it, i)}<button type="button" class="ib" data-act="del" data-i="${i}" aria-label="Slet ${esc(L.one.toLowerCase())} ${i + 1}">×</button></li>`).join('')}</ol>`;
@@ -770,6 +781,11 @@ function edited() {
 listEl.addEventListener('input', (e) => {
   const el = e.target.closest('[data-k]'); if (!el) return;
   const it = state.items[Number(el.dataset.i)]; if (!it) return;
+  // Files belong to a question by its text, so they follow it when it is reworded.
+  if (el.dataset.k === 'q' && perQuestion(sec(state.openId))) {
+    const was = String(it.q ?? '').trim();
+    for (const e of filesOf(state.openId)) if (e.q === was) e.q = el.value.trim();
+  }
   it[el.dataset.k] = el.value;
   grow(el);
   const s = sec(state.openId); const n = cleanItems(s, state.items).length;
@@ -801,12 +817,16 @@ listEl.addEventListener('click', (e) => {
   }
   if (b.dataset.act === 'del') {
     // A row with text needs a second click, so nothing is lost by accident.
-    if (filled(s, state.items[i]) && !b.classList.contains('confirm')) {
+    const q = perQuestion(s) ? tagOf(i) : undefined;
+    const hasFiles = q !== undefined && filesOf(s.id).some((e) => e.q === q);
+    if ((filled(s, state.items[i]) || hasFiles) && !b.classList.contains('confirm')) {
       b.classList.add('confirm'); b.textContent = 'Slet?';
       setTimeout(() => { if (b.isConnected) { b.classList.remove('confirm'); b.textContent = '×'; } }, 3000);
       return;
     }
     state.items.splice(i, 1);
+    // Its files go too, unless another card asks the same question.
+    if (hasFiles && !state.items.some((it) => String(it.q ?? '').trim() === q)) state.files[s.id] = filesOf(s.id).filter((e) => e.q !== q);
     state.items = startItems(s, state.items);
     renderList(); edited();
     focusField(Math.min(i, state.items.length - 1));
@@ -818,6 +838,83 @@ function addItem(at, k) {
   state.items.splice(at, 0, blankItem(s));
   renderList();
   focusField(at, k);
+}
+
+// ---------- files ----------
+// Pictures, drawings and PDFs go with "Send til Word" as attachments; the board itself doesn't keep them.
+// Each is tagged with the question it belongs to (q), or null for the whole section, and kept in this tab until sent.
+// Discord takes 10 files per message, so one is left for message.txt.
+const MAX_FILES = 9; const MAX_FILE = 10 * 1024 * 1024; const MAX_TOTAL = 24 * 1024 * 1024;
+const perQuestion = (s) => Boolean(s?.list?.fields.some((f) => f.k === 'q'));
+const filesOf = (id) => (state.files[id] ||= []);
+const tagOf = (key) => (key === 'sec' ? null : String(state.items[Number(key)]?.q ?? '').trim());
+const isPic = (f) => f.type.startsWith('image/');
+const kb = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB`);
+const thumbs = new Map();
+const thumb = (f) => { if (!thumbs.has(f)) thumbs.set(f, URL.createObjectURL(f)); return thumbs.get(f); };
+
+function fileBox(key) {
+  const tag = tagOf(key);
+  const mine = filesOf(state.openId).filter((e) => e.q === tag);
+  const list = mine.map(({ file: f }) => {
+    const n = filesOf(state.openId).findIndex((e) => e.file === f);
+    const icon = isPic(f) ? `<img class="thumb" alt="" src="${thumb(f)}">` : `<span class="thumb">${esc((f.name.split('.').pop() || 'fil').slice(0, 4).toUpperCase())}</span>`;
+    return `<li>${icon}<span class="name">${esc(f.name)}</span><span class="size">${kb(f.size)}</span><button type="button" class="ib" data-unfile="${n}" aria-label="Fjern ${esc(f.name)}">×</button></li>`;
+  }).join('');
+  return `<div class="fbox" data-fbox="${key}">
+    ${key === 'sec' ? '' : `<span class="fbox-head">Filer${mine.length ? ` · ${mine.length}` : ''}</span>`}
+    <ul class="file-list">${list}</ul>
+    <label class="drop"><input type="file" multiple accept="image/*,.pdf,application/pdf" data-fpick="${key}"><span><b>Tilføj billeder eller PDF'er</b> eller træk dem herind</span></label>
+    ${state.fileMsg && state.fileKey === String(key) ? `<span class="hook-msg" role="status">${esc(state.fileMsg)}</span>` : ''}
+  </div>`;
+}
+
+// Sheets without questions get one file box for the whole section.
+function renderSectionFiles() {
+  const s = sec(state.openId); const box = $('#sFiles');
+  box.hidden = !s || perQuestion(s);
+  if (box.hidden) return;
+  const n = filesOf(s.id).length;
+  box.innerHTML = `<div class="items-head"><h3>Filer</h3><span>${n ? `${n} ${n === 1 ? 'fil' : 'filer'}` : ''}</span></div>
+    <p class="files-hint">Billeder, tegninger og PDF'er sendes med, når du trykker <b>Send til Word</b>. Billederne kommer i Bilag. Filerne gemmes ikke på brættet.</p>${fileBox('sec')}`;
+}
+
+const renderFiles = () => (perQuestion(sec(state.openId)) ? renderList() : renderSectionFiles());
+
+function addFiles(key, picked) {
+  const all = filesOf(state.openId); const tag = tagOf(key); const skipped = [];
+  for (const f of picked) {
+    const total = all.reduce((n, e) => n + e.file.size, 0);
+    if (!isPic(f) && !/\.pdf$/i.test(f.name)) skipped.push(`${f.name} er hverken et billede eller en PDF`);
+    else if (f.size > MAX_FILE) skipped.push(`${f.name} er over 10 MB`);
+    else if (all.length >= MAX_FILES) skipped.push(`højst ${MAX_FILES} filer per afsnit ad gangen`);
+    else if (total + f.size > MAX_TOTAL) skipped.push('højst 24 MB i alt');
+    else if (!all.some((e) => e.q === tag && e.file.name === f.name && e.file.size === f.size)) all.push({ q: tag, file: f });
+  }
+  state.fileMsg = skipped.length ? `Ikke med: ${[...new Set(skipped)].join(', ')}.` : '';
+  state.fileKey = key;
+  renderFiles();
+}
+
+for (const el of [listEl, $('#sFiles')]) {
+  el.addEventListener('change', (e) => {
+    const input = e.target.closest('input[data-fpick]'); if (!input) return;
+    addFiles(input.dataset.fpick, [...input.files]);
+  });
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-unfile]'); if (!b) return;
+    const [gone] = filesOf(state.openId).splice(Number(b.dataset.unfile), 1);
+    if (gone && thumbs.has(gone.file)) { URL.revokeObjectURL(thumbs.get(gone.file)); thumbs.delete(gone.file); }
+    state.fileMsg = '';
+    renderFiles();
+  });
+  el.addEventListener('dragover', (e) => { const d = e.target.closest('.drop'); if (d) { e.preventDefault(); d.classList.add('over'); } });
+  el.addEventListener('dragleave', (e) => e.target.closest('.drop')?.classList.remove('over'));
+  el.addEventListener('drop', (e) => {
+    const box = e.target.closest('[data-fbox]'); if (!box) return;
+    e.preventDefault();
+    addFiles(box.dataset.fbox, [...e.dataTransfer.files]);
+  });
 }
 
 // ---------- saving ----------
@@ -952,15 +1049,21 @@ const WEBHOOK_RE = /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/web
 const webhook = () => { try { const u = localStorage.getItem('rb-webhook') || ''; return WEBHOOK_RE.test(u) ? u : ''; } catch { return ''; } };
 const sendLabel = () => { $('#sCopy').textContent = webhook() ? 'Send til Word' : 'Kopiér til Word'; };
 
-async function sendToBot(s, payload) {
+async function sendToBot(s, payload, files = []) {
   const form = new FormData();
-  const message = { username: 'Rapportbrættet', allowed_mentions: { parse: [] } };
+  const message = { username: 'Rapportbrættet', allowed_mentions: { parse: [] }, attachments: [] };
   // Discord allows 2000 characters per message, so longer text goes as message.txt, which the bot also reads.
   if (payload.length <= 2000) message.content = payload;
   else {
     message.content = `Rapportbrættet sender **${s.title}** (lang tekst, se filen)`;
     form.append('files[0]', new Blob([payload], { type: 'text/plain' }), 'message.txt');
+    message.attachments.push({ id: 0, filename: 'message.txt' });
   }
+  // The question goes along as the file's description, and the bot uses it as the picture's caption in Bilag.
+  files.forEach(({ q, file }, n) => {
+    form.append(`files[${n + 1}]`, file, file.name);
+    message.attachments.push({ id: n + 1, filename: file.name, description: (q || s.title).slice(0, 1000) });
+  });
   form.append('payload_json', JSON.stringify(message));
   // Discord's answer can't be read from another site, so a sent request counts as delivered.
   await fetch(webhook(), { method: 'POST', body: form, mode: 'no-cors' });
@@ -1003,14 +1106,17 @@ $('#sCopy').addEventListener('click', async () => {
   how.scrollIntoView({ block: 'nearest' });
   if (!text) { how.innerHTML = `<b>Der er ingen tekst endnu.</b> ${s.list ? 'Skriv i teksten eller udfyld en række' : 'Skriv noget'} først, så kan det sendes til Word.`; return; }
   const payload = `rapport:${s.id} (${s.title})\n${text}`;
-  if (!webhook()) return copyForDiscord(payload);
+  const files = [...filesOf(s.id)];
+  const dragFiles = files.length ? '<b>Filerne kommer ikke med.</b> Træk dem selv ind i Discord-beskeden. ' : '';
+  if (!webhook()) return copyForDiscord(payload, dragFiles);
   const btn = $('#sCopy');
   btn.disabled = true; btn.textContent = 'Sender…';
   try {
-    await sendToBot(s, payload);
-    how.innerHTML = `<b>Sendt til botten!</b> Feltet skifter til <b>I Word ✓</b>, når teksten står i Word.${webhookForm(false)}`;
+    await sendToBot(s, payload, files);
+    state.files[s.id] = []; renderFiles();
+    how.innerHTML = `<b>Sendt til botten${files.length ? ` med ${files.length} ${files.length === 1 ? 'fil' : 'filer'}` : ''}!</b> Feltet skifter til <b>I Word ✓</b>, når teksten står i Word.${webhookForm(false)}`;
   } catch {
-    copyForDiscord(payload, '<b>Kunne ikke sende direkte</b>, så teksten er kopieret i stedet. ');
+    copyForDiscord(payload, `<b>Kunne ikke sende direkte</b>, så teksten er kopieret i stedet. ${dragFiles}`);
   } finally {
     btn.disabled = false; sendLabel();
   }
