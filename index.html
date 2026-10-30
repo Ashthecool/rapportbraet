@@ -384,6 +384,7 @@ table.grid { border-collapse: collapse; width: 100%; }
   </div>
 </dialog>
 
+<script src="merge.js"></script>
 <script>
 const PEOPLE = [
   { id: 'asbjorn', name: 'Asbjørn', role: 'Projektleder' },
@@ -528,7 +529,7 @@ const DAYS = [
   ['2026-11-13', 'Playtest', ['test', 'kortlaegning']],
 ];
 
-const state = { docs: {}, word: {}, filter: null, db: null, loaded: false, openId: null, items: [], files: {}, dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
+const state = { docs: {}, raw: {}, local: {}, word: {}, filter: null, db: null, loaded: false, ready: false, openId: null, items: [], base: { text: '', items: [] }, flying: null, missed: false, failing: false, composing: false, retry: null, files: {}, dirty: false, timer: null, lastField: null, saving: Promise.resolve() };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const pawn = (who) => `<svg class="pawn" style="--pc:var(--p-${who})" aria-hidden="true"><use href="#pawn"/></svg>`;
@@ -603,7 +604,7 @@ function renderScore() {
   const order = [...SECTIONS.filter((s) => statusOf(s) === 'done'), ...SECTIONS.filter((s) => statusOf(s) === 'doing'), ...SECTIONS.filter((s) => statusOf(s) === 'todo')];
   $('#track').innerHTML = order.map((s) => `<i class="${statusOf(s)}"></i>`).join('') + '<i title="Mål"></i>' +
     `<svg class="pawn runner" style="left:calc(${(done + 0.5) / (SECTIONS.length + 1) * 100}%)" aria-hidden="true"><use href="#pawn"/></svg>`;
-  if (state.loaded && !$('#sync').dataset.fixed) $('#sync').textContent = `${doing} i gang · ${SECTIONS.length - done - doing} ikke startet`;
+  if (state.loaded && !$('#sync').dataset.fixed) $('#sync').textContent = state.failing ? 'Noget er ikke gemt endnu. Prøver igen…' : `${doing} i gang · ${SECTIONS.length - done - doing} ikke startet`;
 }
 
 function renderToday() {
@@ -669,6 +670,12 @@ const grow = (el) => { if (el.tagName !== 'TEXTAREA') return; el.style.height = 
 const blankItem = (s) => Object.fromEntries(s.list.fields.map((f) => [f.k, '']));
 
 function openSheet(id) {
+  // Until the shared text has arrived the sheet would be empty, and typing in it would save over the real text.
+  if (!state.ready) {
+    const sync = $('#sync');
+    if (!sync.dataset.fixed) sync.textContent = 'Henter teksten. Prøv igen om et øjeblik.';
+    return;
+  }
   if (state.openId && state.openId !== id) flush();
   const s = sec(id); const c = chap(s);
   state.openId = id; state.dirty = false; state.lastField = ta;
@@ -688,6 +695,7 @@ function openSheet(id) {
   ta.style.height = '';
   ta.placeholder = s.list ? `Indledende tekst, hvis I har brug for det. ${s.list.kind === 'table' ? 'Tabellen' : 'Listen'} kommer under.` : 'Skriv løs. Én linje er ét afsnit i Word.';
   loadItems(s);
+  state.base = state.local[id]?.base ?? viewOf(id, state.raw[id]);
   state.fileMsg = '';
   $('#sHow').hidden = true;
   sendLabel();
@@ -712,6 +720,37 @@ function startItems(s, saved = []) {
 
 function loadItems(s) {
   state.items = s.list ? startItems(s, itemsOf(s.id)) : [];
+}
+
+// Where the cursor belongs after the text changed around it.
+function movedCaret(pos, was, now) {
+  let start = 0;
+  while (start < was.length && start < now.length && was[start] === now[start]) start++;
+  if (pos <= start) return pos;
+  let end = 0;
+  while (end < was.length - start && end < now.length - start && was[was.length - 1 - end] === now[now.length - 1 - end]) end++;
+  return was.length - pos <= end ? now.length - (was.length - pos) : Math.min(pos, now.length);
+}
+
+// Puts text and rows in the open sheet without moving the cursor.
+function showInSheet(s, text, items) {
+  if (ta.value !== text) {
+    const was = ta.value;
+    const [from, to] = [ta.selectionStart, ta.selectionEnd];
+    ta.value = text;
+    ta.setSelectionRange(movedCaret(from, was, text), movedCaret(to, was, text));
+    grow(ta);
+  }
+  if (!s.list || sameRows(cleanItems(s, state.items), items)) return;
+  const el = document.activeElement;
+  const at = listEl.contains(el) && el.dataset.k ? { i: el.dataset.i, k: el.dataset.k, from: el.selectionStart, to: el.selectionEnd } : null;
+  const blankAtEnd = state.items.length && !filled(s, state.items.at(-1));
+  state.items = startItems(s, items);
+  if (blankAtEnd && filled(s, state.items.at(-1))) state.items.push(blankItem(s));
+  renderList();
+  if (!at) return;
+  focusField(at.i, at.k);
+  if (at.from !== null && at.from !== undefined) document.activeElement.setSelectionRange?.(at.from, at.to);
 }
 
 // ---------- lists and tables ----------
@@ -772,7 +811,7 @@ function focusField(i, k) {
 }
 
 function edited() {
-  state.dirty = true; updateSheetMeta();
+  state.dirty = true; capture(); updateSheetMeta();
   $('#sSaved').textContent = 'Skriver…';
   clearTimeout(state.timer);
   state.timer = setTimeout(flush, 1200);
@@ -946,35 +985,153 @@ $('#sPull').addEventListener('click', () => {
   ta.value = wordOf(s.id).text || '';
   if (s.list) { state.items = startItems(s); renderList(); }
   grow(ta);
-  patch(s.id, s.list ? { text: ta.value, items: [] } : { text: ta.value });
+  // Taking Word's text is a choice to replace what is here, so this one save doesn't merge.
+  state.local[s.id] = { base: viewOf(s.id, state.raw[s.id]), text: ta.value, items: [], fields: {}, force: true };
+  keepDraft(s.id);
+  commit(s.id);
 });
 
-function patch(id, fields) {
-  const s = sec(id);
-  const next = { text: textOf(id), done: Boolean(docOf(id).done), who: whoOf(s), ...fields };
-  if (s.list) next.items = fields.items ?? itemsOf(id);
-  state.docs[id] = next;
-  renderBoard();
-  if (state.openId === id) updateSheetMeta();
-  return persist(id, next);
+// Typing goes into a working copy (state.local), which is also kept in this browser until the database has it,
+// so a closed tab or a lost connection doesn't lose anything. base is the shared version the copy started from.
+// Every save is a transaction: it reads the newest shared version and merges this copy into it,
+// so a save can never overwrite something it hasn't seen.
+const DRAFT = 'rb-draft-';
+const viewOf = (id, doc) => ({ text: doc ? doc.text || '' : wordOf(id).text || '', items: Array.isArray(doc?.items) ? doc.items : [] });
+const sameView = (a, b) => a.text === b.text && sameRows(a.items, b.items);
+const isChoice = (s) => (k) => s.list?.fields.find((f) => f.k === k)?.type === 'who';
+const mergeView = (s, base, mine, theirs) => ({
+  text: mergeText(base.text, mine.text, theirs.text),
+  items: s.list ? mergeItems(base.items, mine.items, theirs.items, isChoice(s)) : [],
+});
+
+function keepDraft(id) {
+  try {
+    if (state.local[id]) localStorage.setItem(DRAFT + id, JSON.stringify(state.local[id]));
+    else localStorage.removeItem(DRAFT + id);
+  } catch {}
 }
 
-function persist(id, data) {
-  if (!state.db) { try { localStorage.setItem('rb-docs', JSON.stringify(state.docs)); } catch {} return Promise.resolve(); }
-  $('#sSaved').textContent = 'Gemmer…';
+// What the board shows: the shared version, with this browser's unsaved changes on top.
+function showLocal(id) {
+  const L = state.local[id];
+  if (L) state.docs[id] = { ...state.raw[id], text: L.text, items: L.items, ...L.fields };
+  else if (state.raw[id]) state.docs[id] = state.raw[id];
+  else delete state.docs[id];
+}
+
+function capture() {
+  const id = state.openId; const s = sec(id);
+  const L = state.local[id] ||= { base: state.base, text: '', items: [], fields: {} };
+  L.text = ta.value;
+  L.items = s.list ? cleanItems(s, state.items) : [];
+  keepDraft(id);
+}
+
+// Fields like who and done change on their own, so they never carry old text along.
+function patch(id, fields) {
+  const now = viewOf(id, state.raw[id]);
+  const L = state.local[id] ||= { base: now, text: now.text, items: now.items, fields: {} };
+  L.fields = { ...L.fields, ...fields };
+  keepDraft(id);
+  return commit(id);
+}
+
+function commit(id) {
+  clearTimeout(state.retry);
+  showLocal(id);
+  renderBoard();
+  if (state.openId === id) { updateSheetMeta(); $('#sSaved').textContent = 'Gemmer…'; }
   // One write at a time.
-  state.saving = state.saving.then(() => state.db.collection('sections').doc(id).set(data)).then(
-    () => { if (state.openId === id && !state.dirty) $('#sSaved').textContent = 'Gemt for hele gruppen ✓'; },
-    (e) => { $('#sSaved').textContent = e?.code === 'permission-denied' ? 'Databasen afviste teksten. Er den for lang?' :'Kunne ikke gemme. Prøv igen.'; });
+  state.saving = state.saving.then(() => commitNow(id));
   return state.saving;
 }
 
-function flush() {
-  if (!state.dirty || !state.openId) return;
-  clearTimeout(state.timer); state.dirty = false;
-  const s = sec(state.openId);
-  patch(state.openId, s.list ? { text: ta.value, items: cleanItems(s, state.items) } : { text: ta.value });
+async function commitNow(id) {
+  const L = state.local[id];
+  if (!L) return;
+  const s = sec(id);
+  const sent = { text: L.text, items: L.items };
+  const { fields, force } = L;
+  state.flying = id; state.missed = false;
+  try {
+    const write = (fn) => (state.db ? state.db.collection('sections').doc(id).update(fn) : fn(state.raw[id]));
+    const doc = await write((cur) => {
+      const v = force ? sent : mergeView(s, L.base, sent, viewOf(id, cur));
+      const next = { text: v.text, done: Boolean(cur?.done), who: cur?.who || s.who, ...fields };
+      if (s.list) next.items = v.items;
+      return next;
+    });
+    state.failing = false;
+    if (!state.db) {
+      state.raw[id] = doc;
+      try { localStorage.setItem('rb-docs', JSON.stringify(state.raw)); } catch {}
+    }
+    const saved = viewOf(id, doc);
+    if (state.local[id] !== L) return;
+    // Anything typed while this was on its way stays, on top of what was saved.
+    L.text = mergeText(sent.text, L.text, saved.text);
+    L.items = s.list ? mergeItems(sent.items, L.items, saved.items, isChoice(s)) : [];
+    L.base = saved; L.force = false;
+    if (L.fields === fields) L.fields = {};
+    if (sameView(L, saved) && !Object.keys(L.fields).length) delete state.local[id];
+    keepDraft(id);
+    showLocal(id);
+    if (state.openId === id) {
+      state.base = saved;
+      showInSheet(s, L.text, L.items);
+      if (!state.dirty) $('#sSaved').textContent = force || (saved.text === sent.text && sameRows(saved.items, sent.items)) ? 'Gemt for hele gruppen ✓' : 'Flettet med en andens ændringer ✓';
+      updateSheetMeta();
+    }
+    renderBoard();
+  } catch (e) {
+    console.error(e);
+    state.failing = true;
+    // Still in the working copy, so nothing is lost. A rejected text stays until it is shortened; anything else is tried again.
+    const refused = e?.code === 'permission-denied';
+    if (state.openId === id) $('#sSaved').textContent = refused ? 'Databasen afviste teksten. Er den for lang?' : 'Ikke gemt endnu. Prøver igen…';
+    if (!refused) { clearTimeout(state.retry); state.retry = setTimeout(retryAll, 5000); }
+    renderScore();
+  } finally {
+    state.flying = null;
+    // A snapshot that came while saving may be older than the save, so it waits until the save's own has arrived.
+    if (state.missed) setTimeout(refresh, 1500);
+  }
 }
+
+const retryAll = () => Object.keys(state.local).forEach(commit);
+window.addEventListener('online', retryAll);
+
+function flush() {
+  clearTimeout(state.timer);
+  if (!state.dirty || !state.openId) return state.saving;
+  state.dirty = false;
+  return commit(state.openId);
+}
+
+// Brings someone else's new version into the open sheet, on top of anything being typed.
+function rebaseSheet() {
+  const s = state.openId && sec(state.openId);
+  if (!s) return;
+  if (state.flying === s.id) { state.missed = true; return; }
+  const L = state.local[s.id];
+  if (state.composing || L?.force) return;
+  const theirs = viewOf(s.id, state.raw[s.id]);
+  if (sameView(state.base, theirs)) return;
+  const merged = L ? mergeView(s, state.base, L, theirs) : theirs;
+  if (L) { L.text = merged.text; L.items = merged.items; L.base = theirs; keepDraft(s.id); }
+  state.base = theirs;
+  showInSheet(s, merged.text, merged.items);
+}
+
+function refresh() {
+  rebaseSheet();
+  Object.keys(state.local).forEach(showLocal);
+  renderBoard(); renderWord();
+  if (state.openId) updateSheetMeta();
+}
+
+$('#sCanvas').addEventListener('compositionstart', () => { state.composing = true; });
+$('#sCanvas').addEventListener('compositionend', () => { state.composing = false; refresh(); });
 
 ta.addEventListener('input', () => { if (sheet.classList.contains('structured')) grow(ta); edited(); });
 
@@ -1098,8 +1255,13 @@ function copyForDiscord(payload, note = '') {
 }
 
 $('#sCopy').addEventListener('click', async () => {
-  flush();
+  const btn = $('#sCopy');
+  if (btn.disabled) return;
   const s = sec(state.openId);
+  // Waits for the save, so what goes to Word includes what others have written.
+  btn.disabled = true;
+  await flush();
+  btn.disabled = false;
   const text = [ta.value.trim(), s.list ? listMarkdown(s, state.items) : ''].filter(Boolean).join('\n\n');
   const how = $('#sHow');
   how.hidden = false;
@@ -1109,7 +1271,6 @@ $('#sCopy').addEventListener('click', async () => {
   const files = [...filesOf(s.id)];
   const dragFiles = files.length ? '<b>Filerne kommer ikke med.</b> Træk dem selv ind i Discord-beskeden. ' : '';
   if (!webhook()) return copyForDiscord(payload, dragFiles);
-  const btn = $('#sCopy');
   btn.disabled = true; btn.textContent = 'Sender…';
   try {
     await sendToBot(s, payload, files);
@@ -1137,7 +1298,16 @@ async function firebaseStore() {
   const fdb = fs.getFirestore(initializeApp(config));
   return {
     collection: (name) => ({
-      doc: (id) => ({ set: (data) => fs.setDoc(fs.doc(fdb, name, id), data) }),
+      doc: (id) => ({
+        // fn gets the newest version and returns what to save. Firestore runs it again if someone saved in between.
+        update: (fn) => fs.runTransaction(fdb, async (tx) => {
+          const ref = fs.doc(fdb, name, id);
+          const cur = await tx.get(ref);
+          const next = fn(cur.exists() ? cur.data() : null);
+          tx.set(ref, next);
+          return next;
+        }),
+      }),
       onSnapshot: (next, fail) => fs.onSnapshot(fs.collection(fdb, name),
         (snap) => next({ docs: snap.docs.map((d) => ({ id: d.id, data: () => d.data() })) }), fail),
     }),
@@ -1148,27 +1318,28 @@ async function firebaseStore() {
   const db = await firebaseStore().catch((e) => { console.error(e); return null; });
   state.loaded = true;
   if (!db) {
-    try { state.docs = JSON.parse(localStorage.getItem('rb-docs') || '{}'); } catch {}
+    try { state.raw = JSON.parse(localStorage.getItem('rb-docs') || '{}'); } catch {}
+    state.docs = { ...state.raw };
     const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Kun gemt i din browser';
+    state.ready = true;
     renderBoard(); renderWord();
     return;
   }
   state.db = db;
-  const refresh = () => {
-    renderBoard(); renderWord();
-    const s = state.openId && sec(state.openId);
-    // Show someone else's changes in the open sheet, unless you are typing in it right now.
-    if (s && !state.dirty && !$('#sCanvas').contains(document.activeElement)) {
-      if (ta.value !== textOf(s.id)) { ta.value = textOf(s.id); grow(ta); }
-      if (s.list && JSON.stringify(cleanItems(s, state.items)) !== JSON.stringify(itemsOf(s.id))) { loadItems(s); renderList(); }
-    }
-    if (state.openId) updateSheetMeta();
-  };
-  const failed = () => { const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Den fælles tekst kunne ikke hentes'; };
+  const failed = () => { state.ready = false; const sync = $('#sync'); sync.dataset.fixed = '1'; sync.textContent = 'Den fælles tekst kunne ikke hentes'; };
   const byId = (snap) => Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
-  db.collection('sections').onSnapshot((snap) => { state.docs = byId(snap); refresh(); }, failed);
+  const arrived = new Set();
+  // Text that never reached the database (a closed tab, no connection) goes in now.
+  const recoverDrafts = () => {
+    for (const key of Object.keys(localStorage).filter((k) => k.startsWith(DRAFT))) {
+      const id = key.slice(DRAFT.length);
+      try { if (sec(id)) { state.local[id] = JSON.parse(localStorage.getItem(key)); commit(id); } } catch {}
+    }
+  };
+  const hasArrived = (name) => { arrived.add(name); if (arrived.size === 2 && !state.ready) { state.ready = true; recoverDrafts(); } };
+  db.collection('sections').onSnapshot((snap) => { state.raw = byId(snap); state.docs = { ...state.raw }; hasArrived('sections'); refresh(); }, failed);
   // Kept up to date by the Report Helper bot whenever the Word file changes.
-  db.collection('report').onSnapshot((snap) => { state.word = byId(snap); refresh(); }, () => {});
+  db.collection('report').onSnapshot((snap) => { state.word = byId(snap); hasArrived('report'); refresh(); }, () => hasArrived('report'));
 })();
 </script>
 
