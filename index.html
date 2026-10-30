@@ -182,7 +182,12 @@ dialog.structured #sText { flex: none; min-height: 96px; overflow: hidden; paddi
 .hook-row .btn { padding: 6px 12px; }
 .hook-msg { color: var(--danger); font-weight: 700; }
 #sCopy:disabled { opacity: .7; cursor: wait; }
-#sPull.confirm { background: var(--danger); border-color: var(--danger); color: var(--paper); }
+#sPull.confirm, #sReplace.confirm { background: var(--danger); border-color: var(--danger); color: var(--paper); }
+.word-diff { font-size: 13px; }
+.word-diff summary { cursor: pointer; font-weight: 700; }
+#sDiffBody { display: grid; gap: 8px; margin-top: 6px; padding: 10px 12px; max-height: 130px; overflow-y: auto; border-radius: 12px; background: var(--bg); }
+.word-diff h4 { font-size: 13px; }
+.word-diff ul { margin: 2px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
 .copybox { width: 100%; height: 90px; font-size: 13px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
 
 /* Files sent along to Discord, per question or per section */
@@ -375,9 +380,11 @@ table.grid { border-collapse: collapse; width: 100%; }
           <button class="btn primary" type="button" id="sCopy">Kopiér til Word</button>
           <button class="btn" type="button" id="sDone">Marker som færdig</button>
           <span class="word-now" id="sWord"></span>
+          <button class="btn" type="button" id="sReplace" hidden>Erstat i Word</button>
           <button class="btn" type="button" id="sPull" hidden>Hent teksten fra Word</button>
           <span class="saved" id="sSaved"></span>
         </div>
+        <details class="word-diff" id="sDiff" hidden><summary>Se forskellen</summary><div id="sDiffBody"></div></details>
         <div class="howto" id="sHow" hidden></div>
       </div>
     </div>
@@ -554,8 +561,10 @@ const statusOf = (s) => (docOf(s.id).done ? 'done' : wordsOf(s) ? 'doing' : 'tod
 const KIND = { table: 'Tabel', cards: 'Liste', bullets: 'Liste' };
 
 // Compares the board with Word. Word tables aren't part of the bot's text, so table rows are left out on both sides.
+// Lines are compared the way the bot does (lineKey in report.js), so bold and bullet marks don't count as a difference.
 const TABLE_LINE = /^\s*\|.*\|\s*$/;
-const norm = (t) => String(t || '').split('\n').map((l) => l.trim()).filter((l) => l && !TABLE_LINE.test(l)).join('\n');
+const lineKey = (l) => l.replace(/\*/g, '').replace(/^\s*[-•]\s+/, '').replace(/\s+/g, ' ').trim();
+const norm = (t) => String(t || '').split('\n').filter((l) => !TABLE_LINE.test(l)).map(lineKey).filter(Boolean).join('\n');
 const sendText = (s, text, items) => [text.trim(), s.list ? listMarkdown(s, items) : ''].filter(Boolean).join('\n\n');
 function wordStatus(s, text = textOf(s.id), items = itemsOf(s.id)) {
   const w = state.word[s.id];
@@ -567,6 +576,18 @@ function wordStatus(s, text = textOf(s.id), items = itemsOf(s.id)) {
 }
 const WORD_LABEL = { inword: 'I Word ✓', changed: 'Forskellig fra Word', missing: 'Mangler i Word' };
 const wordTag = (st) => (st ? `<span class="wordtag ${st}">${WORD_LABEL[st]}</span>` : '');
+// The lines of a that b doesn't have.
+function missingFrom(a, b) {
+  const left = [...b];
+  return a.filter((l) => { const i = left.indexOf(l); if (i < 0) return true; left.splice(i, 1); return false; });
+}
+function wordDiff(s, text, items) {
+  const mine = norm(sendText(s, text, items)).split('\n');
+  const word = norm(wordOf(s.id).text).split('\n');
+  const part = (title, lines) => (lines.length ? `<div><h4>${title}</h4><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></div>` : '');
+  return part('Kun i Word (fjernes af Erstat i Word)', missingFrom(word, mine)) + part('Kun her på brættet', missingFrom(mine, word)) ||
+    'Word har de samme linjer, men i en anden rækkefølge.';
+}
 
 function renderPlayers() {
   $('#players').innerHTML = PEOPLE.map((p) => `<button type="button" class="player" data-p="${p.id}" style="--pc:var(--p-${p.id})" aria-pressed="${state.filter === p.id}">${pawn(p.id)}<span>${esc(p.name)}<small>${esc(p.role)}</small></span></button>`).join('');
@@ -698,6 +719,8 @@ function openSheet(id) {
   state.base = state.local[id]?.base ?? viewOf(id, state.raw[id]);
   state.fileMsg = '';
   $('#sHow').hidden = true;
+  $('#sDiff').open = false;
+  resetReplace();
   sendLabel();
   $('#sSaved').textContent = state.db ? 'Gemmes automatisk' : 'Gemmes kun i din browser';
   if (!sheet.open) sheet.showModal();
@@ -969,7 +992,8 @@ function updateSheetMeta() {
   $('#sDone').classList.toggle('done-on', done);
   const ws = wordStatus(s, ta.value, state.items);
   $('#sWord').innerHTML = ws === 'missing' ? `${wordTag(ws)} Kør <b>/apply-template</b> i Discord først.` : wordTag(ws);
-  $('#sPull').hidden = ws !== 'changed';
+  $('#sPull').hidden = $('#sReplace').hidden = $('#sDiff').hidden = ws !== 'changed';
+  if (ws === 'changed') $('#sDiffBody').innerHTML = wordDiff(s, ta.value, state.items);
 }
 
 // Someone may have edited Word directly. This takes Word's text instead of sending the board's over it.
@@ -1254,7 +1278,8 @@ function copyForDiscord(payload, note = '') {
   } catch { showBox(); }
 }
 
-$('#sCopy').addEventListener('click', async () => {
+// replace also removes the lines that only exist in Word. Without it the bot keeps them.
+async function sendSection(replace = false) {
   const btn = $('#sCopy');
   if (btn.disabled) return;
   const s = sec(state.openId);
@@ -1267,7 +1292,7 @@ $('#sCopy').addEventListener('click', async () => {
   how.hidden = false;
   how.scrollIntoView({ block: 'nearest' });
   if (!text) { how.innerHTML = `<b>Der er ingen tekst endnu.</b> ${s.list ? 'Skriv i teksten eller udfyld en række' : 'Skriv noget'} først, så kan det sendes til Word.`; return; }
-  const payload = `rapport:${s.id} (${s.title})\n${text}`;
+  const payload = `rapport:${s.id}${replace ? ' !erstat' : ''} (${s.title})\n${text}`;
   const files = [...filesOf(s.id)];
   const dragFiles = files.length ? '<b>Filerne kommer ikke med.</b> Træk dem selv ind i Discord-beskeden. ' : '';
   if (!webhook()) return copyForDiscord(payload, dragFiles);
@@ -1281,6 +1306,23 @@ $('#sCopy').addEventListener('click', async () => {
   } finally {
     btn.disabled = false; sendLabel();
   }
+}
+$('#sCopy').addEventListener('click', () => sendSection());
+
+// Makes Word match this field: the old lines in Word go, while pictures and links stay. Can be undone with /undo.
+function resetReplace() {
+  clearTimeout(state.replaceTimer);
+  $('#sReplace').classList.remove('confirm'); $('#sReplace').textContent = 'Erstat i Word';
+}
+$('#sReplace').addEventListener('click', () => {
+  const b = $('#sReplace');
+  if (!b.classList.contains('confirm')) {
+    b.classList.add('confirm'); b.textContent = 'Fjern den gamle tekst i Word?';
+    state.replaceTimer = setTimeout(resetReplace, 4000);
+    return;
+  }
+  resetReplace();
+  sendSection(true);
 });
 
 // ---------- start ----------
